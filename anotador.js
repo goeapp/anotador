@@ -1,5 +1,8 @@
 /* ============================================================
-   anotador.js — v1.0.0 (13-nov-2026) · subir como anotador.js al repo goeapp/anotador
+   anotador.js — v1.0.1 (13-nov-2026) · subir como anotador.js al repo goeapp/anotador
+   v1.0.1 — Libreta en tiempo real: mientras está abierta, lo que se crea, borra o edita en otro equipo
+            aparece o desaparece solo. Al volver a la app (desbloquear el celular) se actualiza sola.
+   v1.0.0 — primera versión
    Suma el Anotador a cualquier PWA del stack con una línea + una llamada:
 
      <script src="https://goeapp.github.io/anotador/anotador.js"></script>
@@ -18,7 +21,7 @@
 (function () {
   'use strict';
   if (window.Anotador) return;
-  const VERSION = 'v1.0.0';
+  const VERSION = 'v1.0.1';
   const BASE = 'https://goeapp.github.io/anotador/';
   const ORIGEN = new URL(BASE).origin;
   const CEL = window.matchMedia ? window.matchMedia('(max-width: 560px)') : { matches: false };
@@ -140,7 +143,7 @@
   }
 
   // ══════════ CELULAR: libreta simple ══════════
-  let uid = null, notasLib = [], colaLib = [];
+  let uid = null, notasLib = [], colaLib = [], canalLib = null;
   const kNotas = () => 'an_libreta_' + uid, kCola = () => 'an_libreta_cola_' + uid;
   function crearLibreta() {
     if (libreta) return;
@@ -216,6 +219,35 @@
     actividad('libreta_nota', fila.id);
     subirLibreta();
   }
+  // v1.0.1 — tiempo real mientras la libreta está abierta (lo hecho en la compu aparece o desaparece solo)
+  function escucharLibreta() {
+    if (canalLib || !sb.channel || !uid) return;
+    try {
+      canalLib = sb.channel('an-libreta-' + uid)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'an_notas', filter: 'user_id=eq.' + uid }, p => {
+          const pend = new Set(colaLib.map(f => f.id));
+          if (p.eventType === 'DELETE') {
+            const id = p.old && p.old.id;
+            if (id && !pend.has(id)) notasLib = notasLib.filter(n => n.id !== id);
+          } else {
+            const r = p.new; if (!r || pend.has(r.id)) return;
+            notasLib = notasLib.filter(n => n.id !== r.id);
+            if (!r.borrada_at && (r.texto || '').trim()) notasLib.push({ id: r.id, texto: r.texto, color: r.color, creada: r.creada });
+          }
+          guardar(kNotas(), notasLib);
+          pintarLibreta();
+        })
+        .subscribe();
+    } catch (e) { console.warn('[anotador] tiempo real', e && e.message); }
+  }
+  function dejarDeEscuchar() {
+    if (!canalLib) return;
+    try { sb.removeChannel ? sb.removeChannel(canalLib) : canalLib.unsubscribe(); } catch (e) { /* nada */ }
+    canalLib = null;
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && libreta && libreta.classList.contains('an-vis')) cargarLibreta();
+  });
   async function abrirLibreta() {
     const s = await sesion();
     if (!s) { alert('Para usar el Anotador, primero entrá a la app.'); return; }
@@ -225,6 +257,7 @@
     document.documentElement.style.overflow = 'hidden';
     try { history.pushState({ anotador: 1 }, ''); } catch (e) { /* nada */ }
     cargarLibreta();
+    escucharLibreta();
     actividad('abrir', 'libreta');
   }
   window.addEventListener('online', () => { if (libreta) { pintarLibreta(); subirLibreta(); } });
@@ -238,6 +271,7 @@
     if (overlay) overlay.classList.remove('an-vis');
     if (libreta && libreta.classList.contains('an-vis')) {
       libreta.classList.remove('an-vis'); document.documentElement.style.overflow = '';
+      dejarDeEscuchar();
       if (!porAtras && history.state && history.state.anotador) { try { history.back(); } catch (e) { /* nada */ } }
     }
     const b = document.getElementById('an-btn'); if (b && !CEL.matches) b.focus();

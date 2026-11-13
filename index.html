@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Anotador</title>
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f172a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Anotador">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<!--
+  Anotador v1.0.0 (13-nov-2026) — Etapa 1: base + vista Notas (compu y celular).
+  Requiere an_esquema_v1_0_0.sql. Subir como index.html al repo goeapp/anotador
+  (junto con sw.js, manifest.json, icon-192.png e icon-512.png).
+  Diseño: Anotador_Diseno_v0_4.md + maqueta final v0.4.
+  · Login por código (Supabase Auth), como Vale Digital v15.2.6. storageKey 'an-sb-auth'.
+    Entra toda persona registrada en la suite (goe_mi_persona); no hace falta habilitarla aparte.
+  · Notas por usuario (an_notas, RLS por auth.uid()). Se guarda primero en el equipo y se sube sola,
+    sin botón; el id lo genera la PWA, así lo hecho sin señal no se duplica.
+  · Vista Notas: barra "Escribí una nota…" (C), buscador (/), pastillas de etiquetas combinables
+    (las 6 más usadas + "+N más"), ancladas arriba, grilla mampostería, acciones al pasar el mouse.
+  · Nota abierta en pantalla completa (se vuelve con la ✕ o Esc): 6 colores, luz, anclar, copiar,
+    papelera, "+ etiqueta" (escribir o elegir), #algo en el texto también crea la etiqueta.
+  · Etiquetas en minúscula y sin acentos. Automáticas (PWA y obra) con borde fino; del usuario con fondo.
+  · Papelera: Deshacer unos segundos; restaurar durante 30 días; después se borran solas.
+  · Sin señal: pastilla "Sin señal" y nube si quedó algo por subir.
+  · Celular: página propia, atrás, etiquetas en fila deslizable, botón + abajo a la derecha. Sin Pizarrón.
+  · Contexto por la dirección (para la Etapa 3): ?pwa=valedigital&obra=1329-3&vale=…&volver=…  ·  ?nueva=1
+    abre directo una nota nueva (nota rápida).
+  · Actividad en goe_actividad (app an).
+-->
+<style>
+/* ─────────────────────────────────────────────────
+   DESIGN TOKENS — los mismos de Vale Digital v15.2.6 / ClimaObra / BDC / MdT
+───────────────────────────────────────────────── */
+:root {
+  --bg       : #f1f5f9;
+  --surface  : #ffffff;
+  --border   : #e2e8f0;
+  --accent   : #d97706;
+  --accent2  : #0f172a;
+  --tag-bg   : #fef3c7;
+  --tag-fg   : #92400e;
+  --accent-border: #92400e;
+  --text     : #1e293b;
+  --muted    : #64748b;
+  --muted2   : #475569;
+  --radius   : 12px;
+  --radius-sm: 8px;
+  --shadow   : 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.10);
+  --header-h : 56px;
+  --danger   : #dc2626;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; min-height: 100%; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+button { font-family: inherit; cursor: pointer; }
+input, select, textarea { font-family: inherit; }
+.hidden { display: none !important; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* ── LOGIN (de Vale Digital v15.2.6) ── */
+.pantalla-centrada { display: none; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; gap: 24px; padding: 20px; }
+.pantalla-centrada.visible { display: flex; }
+.caja { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 40px 36px; max-width: 380px; width: 100%; text-align: center; box-shadow: var(--shadow-md); }
+.caja-logo    { font-family: 'Bebas Neue', sans-serif; font-size: 1.9rem; color: var(--accent); letter-spacing: .5px; margin-bottom: 4px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.caja-version { font-size: .62rem; color: var(--muted); letter-spacing: .03em; margin-bottom: 4px; }
+.caja-sub     { font-size: .78rem; color: var(--muted); margin-bottom: 28px; }
+.caja-title   { font-size: 1rem; font-weight: 600; margin-bottom: 6px; }
+.caja-desc    { font-size: .8rem; color: var(--muted); margin-bottom: 22px; line-height: 1.6; }
+.login-paso { display: none; }
+.login-paso.activo { display: block; }
+.input-email, .input-pin { width: 100%; padding: 11px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-size: .9rem; color: var(--text); margin-bottom: 14px; text-align: center; transition: border-color .15s; }
+.input-email:focus, .input-pin:focus { outline: none; border-color: var(--accent); }
+.input-pin { font-size: 1.4rem; letter-spacing: 6px; font-family: monospace; }
+.btn-accion { width: 100%; padding: 10px 18px; border: 1px solid var(--accent-border); border-radius: var(--radius-sm); background: var(--accent); color: #fff; font-size: .82rem; font-weight: 600; transition: background .15s; }
+.btn-accion:hover:not(:disabled) { background: #b45309; }
+.btn-accion:disabled { opacity: .5; cursor: not-allowed; }
+.btn-secundario { width: 100%; padding: 9px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--muted); font-size: .78rem; margin-top: 10px; }
+.btn-secundario:disabled { opacity: .5; cursor: not-allowed; }
+.msg-error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: var(--radius-sm); padding: 9px 12px; font-size: .78rem; margin-bottom: 14px; text-align: left; display: none; }
+.msg-error.visible { display: block; }
+.spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; margin: 0 auto 16px; animation: girar .8s linear infinite; }
+@keyframes girar { to { transform: rotate(360deg); } }
+
+/* ── ENCABEZADO ── */
+#app { display: none; flex-direction: column; min-height: 100%; }
+#app-header { min-height: var(--header-h); background: var(--accent2); display: flex; align-items: center; gap: 12px; padding: 8px 18px; position: sticky; top: 0; z-index: 1000; }
+.hdr-logo { display: flex; align-items: center; gap: 8px; color: var(--accent); }
+.hdr-logo i { font-size: 1.35rem; }
+.hdr-logo span { font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: .4px; line-height: 1; }
+.hdr-version { font-size: .62rem; color: rgba(255,255,255,.4); white-space: nowrap; }
+.hdr-back { display: none; }
+.hdr-buscar { display: flex; align-items: center; gap: 8px; background: #1e293b; border: 1px solid rgba(255,255,255,.14); border-radius: var(--radius-sm); padding: 6px 10px; width: 340px; color: rgba(255,255,255,.55); }
+.hdr-buscar input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: #fff; font-size: .84rem; }
+.hdr-buscar input::placeholder { color: rgba(255,255,255,.45); }
+.kbd { font-size: .68rem; border: 1px solid rgba(255,255,255,.25); border-radius: 4px; padding: 0 5px; line-height: 1.5; }
+.hdr-sep { flex: 1; }
+.pill-senal { display: inline-flex; align-items: center; gap: 6px; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 99px; padding: 3px 10px; font-size: .74rem; font-weight: 700; white-space: nowrap; }
+.ic-nube { color: #fbbf24; font-size: 1.2rem; display: inline-flex; }
+.hdr-ic { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 32px; height: 32px; border-radius: var(--radius-sm); background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); color: rgba(255,255,255,.8); font-size: 1rem; padding: 0 8px; }
+.hdr-ic:hover { border-color: var(--accent); color: var(--accent); }
+.hdr-ic .cnt { font-size: .68rem; font-weight: 700; }
+.hdr-email { font-size: .72rem; color: rgba(255,255,255,.45); white-space: nowrap; cursor: pointer; background: none; border: 0; }
+.hdr-email:hover { color: #fff; }
+
+/* ── CUERPO ── */
+main { flex: 1; width: 100%; max-width: 1320px; margin: 0 auto; padding: 18px 24px 90px; display: flex; flex-direction: column; gap: 14px; }
+
+/* Barra "Escribí una nota…" */
+.barra-nueva { width: 100%; max-width: 620px; margin: 0 auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); transition: box-shadow .15s, background .15s; }
+.barra-nueva.abierta { box-shadow: 0 8px 24px rgba(15,23,42,.14); }
+.barra-fila { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: text; }
+.barra-fila .punto { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+.barra-fila .ph { flex: 1; color: var(--muted); font-size: .95rem; }
+.kbd-claro { font-size: .7rem; color: var(--muted2); border: 1px solid #cbd5e1; border-radius: 4px; padding: 0 6px; }
+.barra-edit { display: none; padding: 12px 16px 10px; }
+.barra-nueva.abierta .barra-fila { display: none; }
+.barra-nueva.abierta .barra-edit { display: block; }
+.barra-edit textarea { width: 100%; border: 0; outline: 0; resize: none; background: transparent; font-size: .95rem; line-height: 1.55; color: var(--text); min-height: 70px; }
+.barra-pie { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.barra-pie .estado-guardado { font-size: .72rem; color: var(--muted2); margin-left: auto; }
+
+/* Pastillas de etiquetas */
+.filtros { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; position: relative; }
+.etq { display: inline-flex; align-items: center; gap: 5px; border-radius: 99px; padding: 2px 9px; font-size: .72rem; font-weight: 600; white-space: nowrap; line-height: 1.5; border: 1px solid transparent; }
+.etq.auto { background: transparent; color: #334155; border-color: #64748b; }
+.etq.usr  { background: var(--tag-bg); color: var(--tag-fg); border-color: var(--tag-bg); }
+.etq .n { opacity: .7; font-weight: 500; }
+button.etq { cursor: pointer; font-family: inherit; }
+button.etq:hover { filter: brightness(.96); }
+.etq.activa { background: var(--accent2) !important; color: #fff !important; border-color: var(--accent2) !important; }
+.etq.mas { background: transparent; border: 1px dashed #94a3b8; color: #334155; }
+.etq .quitar { border: 0; background: none; color: inherit; font-size: .8rem; padding: 0 0 0 2px; line-height: 1; opacity: .7; }
+.etq .quitar:hover { opacity: 1; }
+
+/* Popover genérico */
+.pop { position: absolute; z-index: 1200; background: #fff; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 30px rgba(15,23,42,.18); padding: 10px; width: 280px; }
+.pop-buscar { display: flex; align-items: center; gap: 8px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 10px; color: var(--muted2); }
+.pop-buscar:focus-within { border-color: var(--accent); }
+.pop-buscar input { flex: 1; min-width: 0; border: 0; outline: 0; font-size: .84rem; color: var(--text); }
+.pop-lista { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; max-height: 220px; overflow-y: auto; }
+.pop-opciones { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; max-height: 220px; overflow-y: auto; }
+.pop-op { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: transparent; border: 0; border-radius: 6px; padding: 7px 10px; font-size: .84rem; color: var(--text); text-align: left; }
+.pop-op:hover, .pop-op.sel { background: #f1f5f9; }
+.pop-op .cnt { color: var(--muted2); font-size: .72rem; }
+.pop-vacio { font-size: .78rem; color: var(--muted); padding: 6px 4px; }
+.pop-colores { display: flex; gap: 8px; width: auto; padding: 8px 10px; }
+
+/* Secciones y grilla mampostería */
+.seccion-tit { font-size: .7rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted2); margin: 6px 0 -2px 2px; }
+.grilla { display: flex; gap: 14px; align-items: flex-start; }
+.grilla-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+.vacio { text-align: center; color: var(--muted); padding: 50px 20px; font-size: .9rem; }
+.vacio i { font-size: 2.4rem; display: block; margin-bottom: 8px; color: #cbd5e1; }
+
+/* Nota (tarjeta) */
+.nota { position: relative; margin: 0 0 14px; border: 1px solid; border-radius: 6px 6px 6px 18px; padding: 12px 14px 10px; box-shadow: 0 1px 2px rgba(15,23,42,.08), 0 2px 6px rgba(15,23,42,.06); cursor: pointer; transition: box-shadow .15s, transform .15s; display: block; width: 100%; text-align: left; color: var(--text); }
+.nota:hover { box-shadow: 0 10px 24px rgba(15,23,42,.16); }
+.nota.con-luz { padding-right: 46px; }
+.nota .luz { position: absolute; top: 10px; right: 10px; }
+.nota-tit { font-weight: 700; font-size: .9rem; margin-bottom: 3px; overflow-wrap: anywhere; }
+.nota-txt { font-size: .85rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 14; -webkit-box-orient: vertical; overflow: hidden; }
+.nota-etqs { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.nota-pie { font-size: .7rem; color: var(--muted2); margin-top: 8px; display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.nota-pie .sin-subir { color: #b45309; display: inline-flex; }
+.nota-acc { display: flex; gap: 4px; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(15,23,42,.08); opacity: 0; max-height: 0; overflow: hidden; transition: opacity .15s, max-height .15s; }
+.nota:hover .nota-acc, .nota:focus-within .nota-acc { opacity: 1; max-height: 50px; }
+.nota-acc .esp { flex: 1; }
+.ic { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: rgba(15,23,42,.05); border: 1px solid rgba(15,23,42,.10); color: #334155; font-size: .95rem; padding: 0; }
+.ic:hover { background: rgba(15,23,42,.10); color: var(--text); }
+.ic.on { color: #a16207; background: rgba(250,204,21,.35); border-color: rgba(161,98,7,.45); }
+@keyframes entra { from { opacity: 0; transform: scale(.96) translateY(6px); } to { opacity: 1; transform: none; } }
+.nota.entra { animation: entra .28s ease-out; }
+@keyframes destello { 0% { box-shadow: 0 0 0 0 rgba(217,119,6,.55); } 100% { box-shadow: 0 0 0 12px rgba(217,119,6,0); } }
+.nota.destello { animation: destello .7s ease-out; }
+
+/* Colores de papel (los 6 del pizarrón de VD) */
+.c-amarillo { background: #fef9c3; border-color: #eab308; }
+.c-verde    { background: #dcfce7; border-color: #4ade80; }
+.c-rosa     { background: #fce7f3; border-color: #f472b6; }
+.c-celeste  { background: #e0f2fe; border-color: #38bdf8; }
+.c-naranja  { background: #ffedd5; border-color: #fb923c; }
+.c-lila     { background: #f3e8ff; border-color: #c084fc; }
+.punto-color { width: 22px; height: 22px; border-radius: 50%; border: 0; padding: 0; }
+.punto-color.sel { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--text); }
+
+/* Pastilla de luz (solo la lamparita) */
+.luz { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 22px; border-radius: 99px; font-size: .85rem; }
+.luz.on  { background: rgba(250,204,21,.35); border: 1px solid rgba(161,98,7,.45); color: #a16207; }
+.luz.off { background: transparent; border: 1px solid #cbd5e1; color: #94a3b8; }
+button.luz { cursor: pointer; padding: 0; }
+
+/* ── NOTA ABIERTA (pantalla completa) ── */
+#nota-full { position: fixed; inset: 0; z-index: 1100; display: none; flex-direction: column; }
+#nota-full.visible { display: flex; animation: entra .2s ease-out; }
+.nf-barra { min-height: 60px; display: flex; align-items: center; gap: 10px; padding: 10px 22px; border-bottom: 1px solid rgba(15,23,42,.08); flex-wrap: wrap; }
+.nf-volver { display: inline-flex; align-items: center; gap: 6px; background: rgba(15,23,42,.06); border: 1px solid rgba(15,23,42,.12); color: var(--text); border-radius: var(--radius-sm); height: 34px; padding: 0 12px; font-size: .8rem; font-weight: 600; }
+.nf-colores { display: flex; gap: 8px; align-items: center; margin-right: 6px; }
+.nf-barra .ic { width: 34px; height: 34px; font-size: 1.05rem; }
+.nf-cuerpo { flex: 1; overflow-y: auto; padding: 30px max(24px, calc((100% - 900px) / 2)) 10px; }
+.nf-cuerpo textarea { width: 100%; height: 100%; min-height: 50vh; border: 0; outline: 0; resize: none; background: transparent; font-size: 1.15rem; line-height: 1.65; color: var(--text); }
+.nf-pie { padding: 0 max(24px, calc((100% - 900px) / 2)) 22px; display: flex; flex-direction: column; gap: 12px; }
+.nf-etqs { position: relative; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn-etq { display: inline-flex; align-items: center; gap: 5px; border: 1px dashed #64748b; background: rgba(255,255,255,.6); color: var(--text); border-radius: 99px; padding: 3px 12px; font-size: .76rem; font-weight: 600; }
+.nf-info { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .78rem; color: var(--muted2); border-top: 1px solid rgba(15,23,42,.10); padding-top: 12px; }
+.nf-info a { color: #b45309; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
+.nf-info a:hover { text-decoration: underline; }
+.nf-estado { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; }
+.nf-estado.ok { color: #15803d; }
+.nf-estado.pend { color: #b45309; }
+
+/* ── PAPELERA ── */
+.overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 1250; align-items: center; justify-content: center; padding: 20px; }
+.overlay.visible { display: flex; }
+.modal { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-md); width: 100%; max-width: 560px; max-height: 80vh; display: flex; flex-direction: column; }
+.modal-cab { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.modal-cab h2 { font-size: 1rem; flex: 1; display: flex; align-items: center; gap: 8px; }
+.modal-cuerpo { overflow-y: auto; padding: 12px 18px 18px; display: flex; flex-direction: column; gap: 8px; }
+.pap-item { display: flex; gap: 12px; align-items: flex-start; border: 1px solid; border-radius: 8px; padding: 10px 12px; }
+.pap-txt { flex: 1; font-size: .84rem; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.pap-meta { font-size: .7rem; color: var(--muted2); margin-top: 4px; }
+.btn-chico { border: 1px solid var(--accent-border); background: var(--accent); color: #fff; border-radius: var(--radius-sm); padding: 6px 12px; font-size: .76rem; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+.btn-chico:hover { background: #b45309; }
+.btn-chico.sec { background: var(--surface); color: var(--text); border-color: var(--border); }
+.btn-x { background: none; border: 0; font-size: 1.2rem; color: var(--muted2); display: inline-flex; padding: 4px; }
+
+/* ── DIÁLOGOS, SESIÓN Y AVISO (de Vale Digital) ── */
+#dialogo-overlay, #session-dialog-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.4); z-index: 1400; align-items: center; justify-content: center; padding: 20px; }
+#dialogo-overlay.visible, #session-dialog-overlay.visible { display: flex; }
+.dialogo-caja, .session-dialog { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-md); padding: 22px; max-width: 340px; width: 100%; }
+.dialogo-title, .session-dialog-title { font-size: .9rem; font-weight: 700; margin-bottom: 8px; }
+.dialogo-desc { font-size: .8rem; line-height: 1.6; margin-bottom: 18px; }
+.dialogo-botones { display: flex; gap: 10px; }
+.dialogo-botones button { flex: 1; padding: 9px; border-radius: var(--radius-sm); font-size: .8rem; font-weight: 600; border: 1px solid var(--border); }
+.btn-dialogo-cancelar { background: var(--surface); color: var(--text); }
+.btn-dialogo-aceptar { background: var(--accent); color: #fff; border-color: var(--accent) !important; }
+.session-dialog-row { display: flex; justify-content: space-between; gap: 10px; font-size: .78rem; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.session-dialog-label { color: var(--muted); }
+.btn-cerrar-sesion { width: 100%; margin-top: 16px; padding: 9px; border-radius: var(--radius-sm); border: 1px solid #fecaca; background: #fef2f2; color: #991b1b; font-size: .78rem; font-weight: 600; }
+.aviso { position: fixed; left: 24px; bottom: 24px; display: flex; align-items: center; gap: 18px; background: #1e293b; color: #fff; border-radius: 10px; padding: 10px 16px; font-size: .84rem; box-shadow: 0 8px 24px rgba(0,0,0,.25); z-index: 1500; opacity: 0; transform: translateY(12px); pointer-events: none; transition: opacity .2s, transform .2s; }
+.aviso.visible { opacity: 1; transform: none; pointer-events: auto; }
+.aviso button { background: transparent; border: 0; color: #fbbf24; font-weight: 700; font-size: .8rem; letter-spacing: .04em; padding: 0; }
+
+/* Botón + (celular) */
+#fab { display: none; position: fixed; right: 18px; bottom: calc(22px + env(safe-area-inset-bottom)); width: 58px; height: 58px; border-radius: 50%; background: var(--accent); border: 0; color: #fff; font-size: 1.7rem; align-items: center; justify-content: center; box-shadow: 0 6px 18px rgba(217,119,6,.5); z-index: 1050; }
+
+/* ── CELULAR ── */
+@media (max-width: 560px) {
+  #app-header { padding: 6px 8px 6px 4px; gap: 6px; }
+  .hdr-back { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; background: transparent; border: 0; color: #fff; font-size: 1.4rem; }
+  .hdr-logo i, .hdr-version, .hdr-email, .kbd { display: none; }
+  .hdr-buscar { display: none; order: 10; width: 100%; }
+  #app-header.buscando .hdr-buscar { display: flex; }
+  #app-header { flex-wrap: wrap; }
+  .pill-senal .txt { display: none; }
+  .hdr-ic { width: 44px; height: 44px; background: transparent; border: 0; font-size: 1.25rem; }
+  #btn-buscar-cel { display: inline-flex !important; }
+  main { padding: 12px 12px 100px; gap: 10px; }
+  .barra-nueva { display: none; }
+  .filtros { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -12px; padding: 2px 12px; }
+  .filtros::-webkit-scrollbar { display: none; }
+  .filtros .etq { font-size: .74rem; padding: 4px 11px; }
+  .nota .etq { font-size: .68rem; padding: 1px 7px; }
+  .grilla { gap: 10px; }
+  .nota { margin-bottom: 10px; padding: 10px 10px 8px; border-radius: 5px 5px 5px 14px; }
+  .nota.con-luz { padding-right: 42px; }
+  .nota-txt { font-size: .8rem; -webkit-line-clamp: 9; }
+  .nota-acc { display: none; }
+  #fab { display: flex; }
+  .nf-barra { padding: 8px 10px; gap: 6px; }
+  .nf-colores { order: 10; width: 100%; justify-content: center; gap: 12px; margin: 4px 0 2px; }
+  .punto-color { width: 28px; height: 28px; }
+  .nf-barra .ic { width: 40px; height: 40px; }
+  .nf-volver { height: 40px; }
+  .nf-cuerpo { padding: 18px 16px 6px; }
+  .nf-cuerpo textarea { font-size: 1.05rem; }
+  .nf-pie { padding: 0 16px calc(16px + env(safe-area-inset-bottom)); }
+  .aviso { left: 12px; right: 12px; bottom: calc(96px + env(safe-area-inset-bottom)); justify-content: space-between; }
+  .pop { width: calc(100vw - 32px); max-width: 340px; }
+}
+#btn-buscar-cel { display: none; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ LOGIN ═══════════════ -->
+<div id="login-screen" class="pantalla-centrada">
+  <div class="caja">
+    <div class="caja-logo"><i class="ti ti-notes"></i> Anotador</div>
+    <div class="caja-version" id="version-label"></div>
+    <div class="caja-sub">Tus notas, en todas las apps de la suite</div>
+
+    <div id="paso-email" class="login-paso activo">
+      <div class="caja-title">Ingresá tu email</div>
+      <div class="caja-desc">Te vamos a enviar un código de acceso.</div>
+      <div id="login-error-email" class="msg-error"></div>
+      <input type="email" id="input-email" class="input-email" placeholder="nombre@empresa.com" autocomplete="email" aria-label="Email">
+      <button class="btn-accion" id="btn-pedir-pin">Enviar código</button>
+    </div>
+    <div id="paso-codigo" class="login-paso">
+      <div class="caja-title">Ingresá el código</div>
+      <div class="caja-desc">Te enviamos un código a <strong id="email-confirmado"></strong>. Vence en 10 minutos.</div>
+      <div id="login-error-pin" class="msg-error"></div>
+      <input type="text" id="input-pin" class="input-pin" maxlength="10" inputmode="numeric" autocomplete="one-time-code" placeholder="········" aria-label="Código">
+      <button class="btn-accion" id="btn-validar-pin">Ingresar</button>
+      <button class="btn-secundario" id="btn-reenviar-pin">Reenviar código</button>
+      <button class="btn-secundario" id="btn-cambiar-email" style="margin-top:6px">Usar otro email</button>
+    </div>
+    <div id="paso-validando" class="login-paso">
+      <div class="spinner"></div>
+      <div class="caja-desc" style="margin-bottom:0">Validando usuario…</div>
+    </div>
+    <div id="paso-sin-conexion" class="login-paso">
+      <div class="caja-desc">No pudimos conectar con el servidor. Reintentá cuando tengas conexión.</div>
+      <button class="btn-accion" id="btn-reintentar-conexion">Reintentar</button>
+    </div>
+    <div id="paso-error-auth" class="login-paso">
+      <div class="caja-desc" id="texto-error-auth"></div>
+      <button class="btn-accion" id="btn-volver-email">Volver</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ APP ═══════════════ -->
+<div id="app">
+  <header id="app-header">
+    <button class="hdr-back" id="btn-atras" aria-label="Atrás" title="Atrás"><i class="ti ti-arrow-left"></i></button>
+    <div class="hdr-logo"><i class="ti ti-notes"></i><span>Anotador</span></div>
+    <div class="hdr-version" id="version-label-app"></div>
+    <label class="hdr-buscar" id="hdr-buscar">
+      <i class="ti ti-search"></i>
+      <input type="search" id="input-buscar" placeholder="Buscar en las notas" aria-label="Buscar en las notas" autocomplete="off">
+      <span class="kbd">/</span>
+    </label>
+    <span class="hdr-sep"></span>
+    <span class="pill-senal hidden" id="pill-senal" title="Sin señal: lo que escribas se guarda en este equipo y se sube solo"><i class="ti ti-wifi-off"></i><span class="txt">Sin señal</span></span>
+    <span class="ic-nube hidden" id="ic-nube" title=""><i class="ti ti-cloud-upload"></i></span>
+    <button class="hdr-ic" id="btn-buscar-cel" aria-label="Buscar"><i class="ti ti-search"></i></button>
+    <button class="hdr-ic" id="btn-papelera" aria-label="Papelera" title="Papelera"><i class="ti ti-trash"></i><span class="cnt hidden" id="cnt-papelera"></span></button>
+    <button class="hdr-email" id="hdr-email" title="Sesión"></button>
+  </header>
+
+  <main id="main">
+    <div class="barra-nueva" id="barra-nueva">
+      <div class="barra-fila" id="barra-fila" role="button" tabindex="0" aria-label="Escribí una nota">
+        <span class="punto c-amarillo" id="barra-punto"></span>
+        <span class="ph">Escribí una nota…</span>
+        <span class="kbd-claro">C</span>
+      </div>
+      <div class="barra-edit">
+        <textarea id="barra-texto" placeholder="Escribí una nota…" aria-label="Texto de la nota nueva"></textarea>
+        <div class="barra-pie">
+          <button class="ic" id="barra-color" aria-label="Color" title="Color"><i class="ti ti-palette"></i></button>
+          <button class="ic" id="barra-anclar" aria-label="Anclar" title="Anclar"><i class="ti ti-pin"></i></button>
+          <button class="ic" id="barra-abrir" aria-label="Abrir en pantalla completa" title="Abrir en pantalla completa"><i class="ti ti-arrows-maximize"></i></button>
+          <span class="estado-guardado" id="barra-estado"></span>
+          <button class="btn-chico sec" id="barra-listo">Listo</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="filtros" id="filtros"></div>
+    <div id="lista"></div>
+  </main>
+
+  <button id="fab" aria-label="Nota nueva" title="Nota nueva"><i class="ti ti-plus"></i></button>
+</div>
+
+<!-- ═══════════════ NOTA ABIERTA ═══════════════ -->
+<div id="nota-full" role="dialog" aria-label="Nota">
+  <div class="nf-barra">
+    <button class="nf-volver" id="nf-volver" title="Volver (Esc)"><i class="ti ti-x"></i> Volver</button>
+    <span class="hdr-sep"></span>
+    <div class="nf-colores" id="nf-colores"></div>
+    <button class="luz off" id="nf-luz" aria-label="Luz" title="Luz"><i class="ti ti-bulb"></i></button>
+    <button class="ic" id="nf-anclar" aria-label="Anclar" title="Anclar"><i class="ti ti-pin"></i></button>
+    <button class="ic" id="nf-copiar" aria-label="Copiar texto" title="Copiar texto"><i class="ti ti-copy"></i></button>
+    <button class="ic" id="nf-papelera" aria-label="Enviar a la papelera" title="Enviar a la papelera"><i class="ti ti-trash"></i></button>
+  </div>
+  <div class="nf-cuerpo"><textarea id="nf-texto" placeholder="Escribí una nota…" aria-label="Texto de la nota"></textarea></div>
+  <div class="nf-pie">
+    <div class="nf-etqs" id="nf-etqs"></div>
+    <div class="nf-info" id="nf-info"></div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAPELERA ═══════════════ -->
+<div class="overlay" id="papelera-overlay">
+  <div class="modal" role="dialog" aria-label="Papelera">
+    <div class="modal-cab"><h2><i class="ti ti-trash"></i> Papelera</h2><button class="btn-x" id="pap-cerrar" aria-label="Cerrar"><i class="ti ti-x"></i></button></div>
+    <div class="modal-cuerpo" id="pap-lista"></div>
+  </div>
+</div>
+
+<!-- ═══════════════ DIÁLOGOS ═══════════════ -->
+<div id="dialogo-overlay"><div class="dialogo-caja"><div class="dialogo-title" id="dialogo-title"></div><div class="dialogo-desc" id="dialogo-desc"></div><div class="dialogo-botones" id="dialogo-botones"></div></div></div>
+<div id="session-dialog-overlay">
+  <div class="session-dialog">
+    <div class="session-dialog-title">Sesión</div>
+    <div class="session-dialog-row"><span class="session-dialog-label">Email</span><span id="sd-email"></span></div>
+    <div class="session-dialog-row"><span class="session-dialog-label">Nombre</span><span id="sd-nombre"></span></div>
+    <div class="session-dialog-row"><span class="session-dialog-label">Versión</span><span id="sd-version"></span></div>
+    <button class="btn-cerrar-sesion" id="btn-cerrar-sesion">Cerrar sesión en este equipo</button>
+  </div>
+</div>
+<div class="aviso" id="aviso"><span id="aviso-txt"></span><button id="aviso-btn" class="hidden">DESHACER</button></div>
+<div class="pop hidden" id="pop"></div>
+
+<script>
+// ============================================================
+// Anotador — index_anotador_v1_0_0.html  (subir como index.html al repo goeapp/anotador)
+// ============================================================
+const APP_VERSION   = 'v1.0.0';
+const SUPABASE_URL  = 'https://uhuftsxrzwhmvzygcuvp.supabase.co';
+const SUPABASE_KEY  = 'sb_publishable_TCibRAnzgaDIbn_MIirw6w_FltKG8X3';
+const REDIRECT_MAIL = 'https://goeapp.github.io/anotador/';
+const sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, storageKey: 'an-sb-auth' }
+}) : null;
+const COOLDOWN_SEG = 60;
+const SESION_ID = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'S' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+const SESION_KEY = 'an_sesion';
+const TZ = 'America/Argentina/Buenos_Aires';
+const COLORES = ['amarillo', 'verde', 'rosa', 'celeste', 'naranja', 'lila'];
+const COLOR_FUERTE = { amarillo: '#facc15', verde: '#4ade80', rosa: '#f472b6', celeste: '#38bdf8', naranja: '#fb923c', lila: '#c084fc' };
+const PAPELERA_DIAS = 30;
+const TOP_ETQ = 6;
+const MQ_CEL = window.matchMedia ? window.matchMedia('(max-width: 560px)') : { matches: false };
+function esCelular_() { return !!MQ_CEL.matches; }
+
+document.getElementById('version-label').textContent = APP_VERSION;
+document.getElementById('version-label-app').textContent = APP_VERSION;
+document.getElementById('sd-version').textContent = APP_VERSION;
+
+// ── CONTEXTO (lo pasa la PWA que abre el Anotador; Etapa 3) ──
+const PARAMS = new URLSearchParams(location.search);
+const CTX = {
+  pwa:   normEtq(PARAMS.get('pwa') || 'anotador'),
+  obra:  (PARAMS.get('obra') || '').trim() || null,
+  vale:  (PARAMS.get('vale') || '').trim() || null,
+  volver: PARAMS.get('volver') || null,
+  nueva: PARAMS.get('nueva') === '1'
+};
+
+// ── ESTADO ───────────────────────────────────────────────────
+let emailActual = '', nombreActual = '', uidActual = '';
+let notas = {};              // id → nota (lo que hay en este equipo)
+let cola = {};               // id → rev: cambios por subir
+let rev = 0;
+let filtrosEtq = [];         // etiquetas tildadas (se combinan)
+let textoBuscar = '';
+let abiertaId = null;        // nota en pantalla completa
+let abiertaNueva = false;
+let barraId = null;          // nota que se está escribiendo en la barra
+let barraColor = 'amarillo', barraAnclada = false;
+let canalRT = null;
+let cooldownInterval = null;
+let subiendo = false, subirTimer = null;
+let nuevosIds = new Set(), destelloId = null;
+
+// ── UTILIDADES ───────────────────────────────────────────────
+function escaparHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function sinAcentos(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+/** Etiqueta: minúscula, sin acentos, sin espacios (igual que an_normalizar_etiqueta en la base). */
+function normEtq(s) { return sinAcentos(String(s || '').trim().replace(/^#+/, '').toLowerCase()).replace(/\s+/g, '-').replace(/[^a-z0-9_\-]/g, ''); }
+function normLista(arr) { return Array.from(new Set((arr || []).map(normEtq).filter(Boolean))).sort(); }
+function uuid() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); });
+}
+const fmtCorta = new Intl.DateTimeFormat('es-AR', { timeZone: TZ, day: 'numeric', month: 'short' });
+const fmtHora = new Intl.DateTimeFormat('es-AR', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const fmtLarga = new Intl.DateTimeFormat('es-AR', { timeZone: TZ, day: 'numeric', month: 'short', year: 'numeric' });
+function fechaCorta(iso) { const d = new Date(iso); return fmtCorta.format(d).replace('.', '') + ' · ' + fmtHora.format(d); }
+function fechaLarga(iso) { const d = new Date(iso); return fmtLarga.format(d).replace('.', '') + ' · ' + fmtHora.format(d); }
+function hayRed_() { return navigator.onLine && !!sb; }
+function guardarPref(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* sin storage */ } }
+function leerPref(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
+// ── DIÁLOGOS Y AVISO (de Vale Digital) ───────────────────────
+let dialogoResolve = null;
+function mostrarAviso_(mensaje, titulo) {
+  return new Promise(resolve => {
+    dialogoResolve = resolve;
+    document.getElementById('dialogo-title').textContent = titulo || 'Aviso';
+    document.getElementById('dialogo-desc').textContent = mensaje;
+    document.getElementById('dialogo-botones').innerHTML = '<button class="btn-dialogo-aceptar" onclick="cerrarDialogo(true)">Aceptar</button>';
+    document.getElementById('dialogo-overlay').classList.add('visible');
+  });
+}
+function cerrarDialogo(r) {
+  document.getElementById('dialogo-overlay').classList.remove('visible');
+  if (dialogoResolve) { const f = dialogoResolve; dialogoResolve = null; f(!!r); }
+}
+let avisoTimer = null, avisoAccion = null;
+function aviso(m, textoBtn, accion, ms) {
+  const el = document.getElementById('aviso'), btn = document.getElementById('aviso-btn');
+  document.getElementById('aviso-txt').textContent = m;
+  avisoAccion = accion || null;
+  btn.classList.toggle('hidden', !accion);
+  btn.textContent = textoBtn || 'DESHACER';
+  el.classList.add('visible');
+  clearTimeout(avisoTimer);
+  avisoTimer = setTimeout(() => { el.classList.remove('visible'); avisoAccion = null; }, ms || (accion ? 6000 : 2200));
+}
+document.getElementById('aviso-btn').addEventListener('click', () => {
+  const f = avisoAccion; avisoAccion = null;
+  document.getElementById('aviso').classList.remove('visible');
+  if (f) f();
+});
+window.addEventListener('unhandledrejection', e => { console.error('Promesa rechazada sin capturar:', e.reason); });
+
+// ── ACTIVIDAD (goe_actividad, app an). Nunca frena la UI. ───
+function registrarActividad_(evento, objeto, resultado, detalle) {
+  try {
+    if (!sb || !emailActual || !navigator.onLine) return;
+    sb.from('goe_actividad').insert({
+      app: 'an', obra_id: null, sesion_id: SESION_ID, evento: evento,
+      objeto: objeto == null || objeto === '' ? null : String(objeto).slice(0, 2000),
+      resultado: resultado == null || resultado === '' ? null : String(resultado).slice(0, 500),
+      detalle: detalle || null
+    }).then(r => { if (r && r.error) console.warn('[actividad]', r.error.message); }, () => { });
+  } catch (err) { /* nunca frena la UI */ }
+}
+
+// ══════════════════════════════════════════════════════════════
+// LOGIN (de Vale Digital v15.2.6)
+// ══════════════════════════════════════════════════════════════
+function leerSesion() { try { const s = JSON.parse(localStorage.getItem(SESION_KEY) || 'null'); return s && typeof s.email === 'string' && s.uid ? s : null; } catch (e) { return null; } }
+function guardarSesion(s) { try { localStorage.setItem(SESION_KEY, JSON.stringify(s)); } catch (e) { /* sin storage */ } }
+function borrarSesion() { try { localStorage.removeItem(SESION_KEY); } catch (e) { /* sin storage */ } }
+function mostrarPantalla(cual) {
+  document.getElementById('login-screen').classList.toggle('visible', cual === 'login');
+  document.getElementById('app').style.display = cual === 'app' ? 'flex' : 'none';
+}
+function mostrarPasoLogin(paso) {
+  ['email', 'codigo', 'validando', 'sin-conexion', 'error-auth'].forEach(p => document.getElementById('paso-' + p).classList.toggle('activo', p === paso));
+}
+const MOTIVOS_AUTH = {
+  no_encontrado: 'Ese email no está registrado en la suite. Pedile al administrador que te dé de alta en GOE Admin.',
+  sin_sesion: 'La sesión venció. Volvé a ingresar.'
+};
+function mostrarTextoErrorAuth(m) { document.getElementById('texto-error-auth').textContent = MOTIVOS_AUTH[m] || 'No pudimos validar tu sesión. Iniciá sesión de nuevo.'; }
+function traducirErrorAuth(err) {
+  const m = (err && (err.message || err.msg)) || String(err);
+  if (/rate limit|too many|security purposes/i.test(m)) return 'Esperá un minuto antes de pedir un código nuevo.';
+  if (/expired|invalid/i.test(m)) return 'Código incorrecto o vencido. Pedí uno nuevo si hace falta.';
+  if (/fetch|network/i.test(m)) return 'No pudimos conectar. Revisá tu conexión e intentá de nuevo.';
+  if (/signups? not allowed|not allowed/i.test(m)) return MOTIVOS_AUTH.no_encontrado;
+  return m;
+}
+
+/** Sesión de Supabase + persona registrada en la suite (goe_mi_persona). */
+async function validarSesion_() {
+  const s = await sb.auth.getSession();
+  const session = s && s.data && s.data.session;
+  if (!session) return { ok: false, motivo: 'sin_sesion' };
+  const email = String(session.user.email || '').toLowerCase();
+  const rPersona = await sb.rpc('goe_mi_persona');
+  if (rPersona.error) throw new Error(rPersona.error.message);
+  const personaId = rPersona.data;
+  if (!personaId) return { ok: false, motivo: 'no_encontrado' };
+  let nombre = email;
+  const rp = await sb.from('goe_personas').select('nombre_apellido').eq('id', personaId).maybeSingle();
+  if (!rp.error && rp.data) nombre = rp.data.nombre_apellido || email;
+  return { ok: true, email: email, uid: session.user.id, nombreApellido: nombre };
+}
+
+async function boot() {
+  mostrarPantalla('login');
+  const guardada = leerSesion();
+  if (!sb) { if (guardada) return entrar_(guardada, 'sin_red'); mostrarPasoLogin('sin-conexion'); return; }
+  if (guardada && !navigator.onLine) return entrar_(guardada, 'sin_red');
+  mostrarPasoLogin('validando');
+  try {
+    const r = await validarSesion_();
+    if (r.ok) { guardarSesion(r); return entrar_(r, 'sesion'); }
+    if (r.motivo === 'sin_sesion') { borrarSesion(); mostrarPasoLogin('email'); return; }
+    try { await sb.auth.signOut({ scope: 'local' }); } catch (e) { /* sin red */ }
+    borrarSesion(); mostrarTextoErrorAuth(r.motivo); mostrarPasoLogin('error-auth');
+  } catch (err) {
+    if (guardada) return entrar_(guardada, 'sin_red');
+    mostrarPasoLogin('sin-conexion');
+  }
+}
+
+function iniciarCooldownReenvio() {
+  const btn = document.getElementById('btn-reenviar-pin');
+  let restante = COOLDOWN_SEG;
+  btn.disabled = true;
+  clearInterval(cooldownInterval);
+  const tick = () => {
+    btn.textContent = 'Reenviar código (' + restante + 's)';
+    if (restante <= 0) { clearInterval(cooldownInterval); cooldownInterval = null; btn.disabled = false; btn.textContent = 'Reenviar código'; return; }
+    restante--;
+  };
+  tick(); cooldownInterval = setInterval(tick, 1000);
+}
+async function pedirCodigo_(esReenvio) {
+  const btn = document.getElementById(esReenvio ? 'btn-reenviar-pin' : 'btn-pedir-pin');
+  const errBox = document.getElementById(esReenvio ? 'login-error-pin' : 'login-error-email');
+  errBox.classList.remove('visible');
+  const inp = document.getElementById('input-email');
+  const email = (esReenvio ? (inp.dataset.pendiente || '') : inp.value.trim()).toLowerCase();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { errBox.textContent = 'Ingresá un email válido.'; errBox.classList.add('visible'); return; }
+  if (!sb) { mostrarPasoLogin('sin-conexion'); return; }
+  btn.disabled = true;
+  try {
+    const { error } = await sb.auth.signInWithOtp({ email: email, options: { shouldCreateUser: true, emailRedirectTo: REDIRECT_MAIL } });
+    if (error) {
+      console.error('[signInWithOtp]', error);
+      errBox.textContent = traducirErrorAuth(error); errBox.classList.add('visible');
+      if (/rate limit|too many|security purposes/i.test(error.message || '')) {
+        inp.dataset.pendiente = email; document.getElementById('email-confirmado').textContent = email;
+        mostrarPasoLogin('codigo'); iniciarCooldownReenvio(); return;
+      }
+      btn.disabled = false; return;
+    }
+    document.getElementById('email-confirmado').textContent = email;
+    inp.dataset.pendiente = email;
+    document.getElementById('input-pin').value = '';
+    document.getElementById('login-error-pin').classList.remove('visible');
+    mostrarPasoLogin('codigo'); iniciarCooldownReenvio();
+    if (esReenvio) aviso('Código reenviado');
+  } catch (err) { mostrarPasoLogin('sin-conexion'); }
+  if (!esReenvio) btn.disabled = false;
+}
+async function validarCodigo_() {
+  const btn = document.getElementById('btn-validar-pin');
+  const email = document.getElementById('input-email').dataset.pendiente;
+  const pin = document.getElementById('input-pin').value.replace(/\D/g, '');
+  const errBox = document.getElementById('login-error-pin');
+  errBox.classList.remove('visible');
+  if (!/^\d{6,10}$/.test(pin)) { errBox.textContent = 'Revisá el código: son los números que llegaron por mail.'; errBox.classList.add('visible'); return; }
+  btn.disabled = true;
+  try {
+    const { error } = await sb.auth.verifyOtp({ email: email, token: pin, type: 'email' });
+    if (error) { console.error('[verifyOtp]', error); errBox.textContent = traducirErrorAuth(error); errBox.classList.add('visible'); btn.disabled = false; return; }
+    const r = await validarSesion_();
+    if (!r.ok) {
+      try { await sb.auth.signOut({ scope: 'local' }); } catch (e) { /* sin red */ }
+      mostrarTextoErrorAuth(r.motivo); mostrarPasoLogin('error-auth'); btn.disabled = false; return;
+    }
+    clearInterval(cooldownInterval); cooldownInterval = null;
+    guardarSesion(r);
+    await entrar_(r, 'codigo');
+  } catch (err) { mostrarPasoLogin('sin-conexion'); }
+  btn.disabled = false;
+}
+document.getElementById('btn-pedir-pin').addEventListener('click', () => pedirCodigo_(false));
+document.getElementById('input-email').addEventListener('keydown', e => { if (e.key === 'Enter') pedirCodigo_(false); });
+document.getElementById('btn-reenviar-pin').addEventListener('click', () => pedirCodigo_(true));
+document.getElementById('btn-validar-pin').addEventListener('click', validarCodigo_);
+document.getElementById('input-pin').addEventListener('keydown', e => { if (e.key === 'Enter') validarCodigo_(); });
+document.getElementById('btn-reintentar-conexion').addEventListener('click', boot);
+document.getElementById('btn-volver-email').addEventListener('click', () => { document.getElementById('input-pin').value = ''; mostrarPasoLogin('email'); });
+document.getElementById('btn-cambiar-email').addEventListener('click', () => { document.getElementById('input-pin').value = ''; mostrarPasoLogin('email'); });
+
+function abrirSesion_() {
+  document.getElementById('sd-email').textContent = emailActual || '—';
+  document.getElementById('sd-nombre').textContent = nombreActual || '—';
+  document.getElementById('session-dialog-overlay').classList.add('visible');
+}
+document.getElementById('hdr-email').addEventListener('click', abrirSesion_);
+document.getElementById('session-dialog-overlay').addEventListener('click', e => { if (e.target.id === 'session-dialog-overlay') e.target.classList.remove('visible'); });
+document.getElementById('btn-cerrar-sesion').addEventListener('click', async () => {
+  registrarActividad_('logout', '', 'OK');
+  await subir_();
+  try { if (sb) await sb.auth.signOut({ scope: 'local' }); } catch (e) { /* sin red */ }
+  borrarSesion();
+  location.reload();
+});
+
+// ══════════════════════════════════════════════════════════════
+// DATOS: primero en el equipo, después a la base (sin botón)
+// ══════════════════════════════════════════════════════════════
+const keyNotas = () => 'an_notas_' + uidActual;
+const keyCola  = () => 'an_cola_' + uidActual;
+function guardarEquipo_() {
+  try { localStorage.setItem(keyNotas(), JSON.stringify(notas)); localStorage.setItem(keyCola(), JSON.stringify(cola)); }
+  catch (e) { console.warn('[equipo] no se pudo guardar', e); }
+}
+function leerEquipo_() {
+  try { notas = JSON.parse(localStorage.getItem(keyNotas()) || '{}') || {}; } catch (e) { notas = {}; }
+  try { cola = JSON.parse(localStorage.getItem(keyCola()) || '{}') || {}; } catch (e) { cola = {}; }
+}
+function nuevaNota_(datos) {
+  const ahora = new Date().toISOString();
+  return Object.assign({
+    id: uuid(), texto: '', color: 'amarillo', anclada: false, luz: false,
+    etiquetas: [], etiquetas_auto: normLista([CTX.pwa, CTX.obra]),
+    pwa: CTX.pwa, obra: CTX.obra, vale: CTX.vale, origen_url: CTX.volver,
+    creada: ahora, actualizada: ahora, borrada_at: null
+  }, datos || {});
+}
+/** #algo en el texto también crea la etiqueta (no se explica en pantalla). */
+function etiquetasDelTexto_(t) {
+  const out = [], re = /(^|[\s(])#([\p{L}\p{N}_\-]{2,40})/gu;
+  let m; while ((m = re.exec(t || ''))) out.push(m[2]);
+  return out;
+}
+/** Guarda un cambio: en el equipo al instante, a la base enseguida. */
+function guardarNota_(n, cambios) {
+  Object.assign(n, cambios || {});
+  n.etiquetas = normLista((n.etiquetas || []).concat(etiquetasDelTexto_(n.texto)));
+  n.actualizada = new Date().toISOString();
+  notas[n.id] = n;
+  cola[n.id] = ++rev;
+  guardarEquipo_();
+  programarSubida_();
+  pintarEstadoRed_();
+}
+function filaBase_(n) {
+  return { id: n.id, texto: n.texto, color: n.color, anclada: !!n.anclada, luz: !!n.luz,
+    etiquetas: n.etiquetas || [], etiquetas_auto: n.etiquetas_auto || [], pwa: n.pwa || null, obra: n.obra || null,
+    vale: n.vale || null, origen_url: n.origen_url || null, creada: n.creada, borrada_at: n.borrada_at || null };
+}
+function programarSubida_() { clearTimeout(subirTimer); subirTimer = setTimeout(subir_, 700); }
+async function subir_() {
+  clearTimeout(subirTimer);
+  if (subiendo || !hayRed_()) return;
+  const ids = Object.keys(cola).filter(id => notas[id]);
+  Object.keys(cola).forEach(id => { if (!notas[id]) delete cola[id]; });
+  if (!ids.length) { pintarEstadoRed_(); return; }
+  subiendo = true;
+  const revs = {}; ids.forEach(id => revs[id] = cola[id]);
+  try {
+    const { error } = await sb.from('an_notas').upsert(ids.map(id => filaBase_(notas[id])), { onConflict: 'id' });
+    if (error) throw error;
+    ids.forEach(id => { if (cola[id] === revs[id]) delete cola[id]; });
+    guardarEquipo_();
+  } catch (err) {
+    console.warn('[subir]', err && err.message);
+    registrarActividad_('subir', ids.length + ' notas', 'ERROR', { error: err && err.message });
+  }
+  subiendo = false;
+  pintarEstadoRed_();
+  if (Object.keys(cola).some(id => !(id in revs) || cola[id] !== revs[id])) programarSubida_();
+}
+/** Trae todo de la base y lo mezcla con lo del equipo (lo que falta subir gana). */
+async function bajar_() {
+  if (!hayRed_()) return;
+  try {
+    const { data, error } = await sb.from('an_notas').select('*').order('creada', { ascending: false });
+    if (error) throw error;
+    const remotos = {};
+    (data || []).forEach(r => { remotos[r.id] = true; if (!cola[r.id] && r.id !== abiertaId && r.id !== barraId) notas[r.id] = desdeFila_(r); });
+    Object.keys(notas).forEach(id => { if (!remotos[id] && !cola[id] && id !== abiertaId && id !== barraId) delete notas[id]; });
+    guardarEquipo_();
+    pintar_();
+  } catch (err) { console.warn('[bajar]', err && err.message); }
+}
+function desdeFila_(r) {
+  return { id: r.id, texto: r.texto || '', color: COLORES.includes(r.color) ? r.color : 'amarillo', anclada: !!r.anclada, luz: !!r.luz,
+    etiquetas: r.etiquetas || [], etiquetas_auto: r.etiquetas_auto || [], pwa: r.pwa, obra: r.obra, vale: r.vale, origen_url: r.origen_url,
+    creada: r.creada, actualizada: r.actualizada, borrada_at: r.borrada_at };
+}
+function conectarRT_() {
+  if (!sb || canalRT || !uidActual) return;
+  try {
+    canalRT = sb.channel('an-notas-' + uidActual)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'an_notas', filter: 'user_id=eq.' + uidActual }, p => {
+        if (p.eventType === 'DELETE') { const id = p.old && p.old.id; if (id && !cola[id]) { delete notas[id]; guardarEquipo_(); pintar_(); } return; }
+        const r = p.new; if (!r || cola[r.id]) return;
+        if (r.id === abiertaId || r.id === barraId) return;      // no pisar lo que se está escribiendo
+        notas[r.id] = desdeFila_(r); guardarEquipo_(); pintar_();
+      })
+      .subscribe();
+  } catch (e) { console.warn('[rt]', e); }
+}
+/** Papelera: más de 30 días → se borran solas. */
+async function purgarPapelera_() {
+  const limite = Date.now() - PAPELERA_DIAS * 86400000;
+  let cambio = false;
+  Object.values(notas).forEach(n => { if (n.borrada_at && Date.parse(n.borrada_at) < limite && !cola[n.id]) { delete notas[n.id]; cambio = true; } });
+  if (cambio) guardarEquipo_();
+  if (hayRed_()) { try { const r = await sb.rpc('an_purgar_papelera'); if (r && r.data) registrarActividad_('papelera_purgar', String(r.data), 'OK'); } catch (e) { /* nada */ } }
+}
+
+// ── ESTADO DE RED (pastilla "Sin señal" + nube) ──────────────
+function pintarEstadoRed_() {
+  const pend = Object.keys(cola).length;
+  document.getElementById('pill-senal').classList.toggle('hidden', navigator.onLine);
+  const nube = document.getElementById('ic-nube');
+  nube.classList.toggle('hidden', !pend);
+  nube.title = pend ? pend + (pend === 1 ? ' nota por subir' : ' notas por subir') : '';
+  if (abiertaId) pintarInfoFull_();
+  pintarEstadoBarra_();
+}
+window.addEventListener('online', () => { pintarEstadoRed_(); subir_().then(bajar_); });
+window.addEventListener('offline', pintarEstadoRed_);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && uidActual) { subir_().then(bajar_); } else if (document.hidden) subir_(); });
+
+// ══════════════════════════════════════════════════════════════
+// ENTRAR
+// ══════════════════════════════════════════════════════════════
+async function entrar_(s, via) {
+  emailActual = s.email; nombreActual = s.nombreApellido || s.email; uidActual = s.uid;
+  document.getElementById('hdr-email').textContent = emailActual;
+  leerEquipo_();
+  rev = Math.max(0, ...Object.values(cola).map(Number).filter(isFinite));
+  mostrarPantalla('app');
+  pintarAtras_();
+  pintarEstadoRed_();
+  pintar_();
+  registrarActividad_('login', via, 'OK', { pwa: CTX.pwa, obra: CTX.obra });
+  if (CTX.nueva) abrirNueva_();
+  await purgarPapelera_();
+  await subir_();
+  await bajar_();
+  conectarRT_();
+}
+function pintarAtras_() {
+  const b = document.getElementById('btn-atras');
+  const puede = !!CTX.volver || history.length > 1;
+  b.style.visibility = puede ? 'visible' : 'hidden';
+}
+document.getElementById('btn-atras').addEventListener('click', async () => {
+  await subir_();
+  if (CTX.volver && /^https?:\/\//i.test(CTX.volver)) location.href = CTX.volver;
+  else history.back();
+});
+
+// ══════════════════════════════════════════════════════════════
+// VISTA NOTAS
+// ══════════════════════════════════════════════════════════════
+function activas_() { return Object.values(notas).filter(n => !n.borrada_at && (n.texto || '').trim() !== ''); }
+function todasEtq_(n) { return (n.etiquetas_auto || []).concat(n.etiquetas || []); }
+function conteoEtiquetas_() {
+  const cnt = {}, auto = {};
+  activas_().forEach(n => {
+    (n.etiquetas_auto || []).forEach(e => { cnt[e] = (cnt[e] || 0) + 1; auto[e] = true; });
+    (n.etiquetas || []).forEach(e => { cnt[e] = (cnt[e] || 0) + 1; });
+  });
+  return Object.keys(cnt).map(e => ({ e: e, n: cnt[e], auto: !!auto[e] })).sort((a, b) => b.n - a.n || a.e.localeCompare(b.e));
+}
+function esAuto_(e) { return activas_().some(n => (n.etiquetas_auto || []).includes(e)) && !activas_().some(n => (n.etiquetas || []).includes(e)); }
+function filtradas_() {
+  const palabras = sinAcentos(textoBuscar.toLowerCase()).split(/\s+/).filter(Boolean);
+  return activas_().filter(n => {
+    const etqs = todasEtq_(n);
+    if (filtrosEtq.some(f => !etqs.includes(f))) return false;
+    if (!palabras.length) return true;
+    const base = sinAcentos(((n.texto || '') + ' ' + etqs.map(e => '#' + e).join(' ')).toLowerCase());
+    return palabras.every(p => base.includes(p));
+  }).sort((a, b) => Date.parse(b.creada) - Date.parse(a.creada));
+}
+function htmlEtq_(e, auto, extra) { return '<span class="etq ' + (auto ? 'auto' : 'usr') + '">#' + escaparHtml(e) + (extra || '') + '</span>'; }
+function primeraLinea_(t) {
+  const lineas = String(t || '').split('\n');
+  if (lineas.length > 1 && lineas[0].trim() && lineas[0].length <= 80) return { tit: lineas[0].trim(), resto: lineas.slice(1).join('\n').replace(/^\n+/, '') };
+  return { tit: '', resto: String(t || '') };
+}
+function htmlNota_(n) {
+  const p = primeraLinea_(n.texto);
+  const etqs = (n.etiquetas_auto || []).map(e => htmlEtq_(e, true)).join('') + (n.etiquetas || []).filter(e => !(n.etiquetas_auto || []).includes(e)).map(e => htmlEtq_(e, false)).join('');
+  const origen = n.vale ? ' · ' + escaparHtml(n.vale) : '';
+  const clases = ['nota', 'c-' + n.color];
+  if (n.luz) clases.push('con-luz');
+  if (nuevosIds.has(n.id)) clases.push('entra');
+  if (destelloId === n.id) clases.push('destello');
+  return '<div class="' + clases.join(' ') + '" data-id="' + n.id + '" tabindex="0" role="button" aria-label="Abrir nota">' +
+    (n.luz ? '<span class="luz on" title="Luz prendida"><i class="ti ti-bulb"></i></span>' : '') +
+    (p.tit ? '<div class="nota-tit">' + escaparHtml(p.tit) + '</div>' : '') +
+    (p.resto ? '<div class="nota-txt">' + escaparHtml(p.resto) + '</div>' : '') +
+    (etqs ? '<div class="nota-etqs">' + etqs + '</div>' : '') +
+    '<div class="nota-pie">' + fechaCorta(n.creada) + origen + (cola[n.id] ? ' <span class="sin-subir" title="Falta subir"><i class="ti ti-cloud-upload"></i></span>' : '') + '</div>' +
+    '<div class="nota-acc">' +
+      '<button class="ic" data-acc="color" aria-label="Color" title="Color"><i class="ti ti-palette"></i></button>' +
+      '<button class="ic" data-acc="etiqueta" aria-label="Etiqueta" title="Etiqueta"><i class="ti ti-tag"></i></button>' +
+      '<button class="ic" data-acc="copiar" aria-label="Copiar" title="Copiar"><i class="ti ti-copy"></i></button>' +
+      '<button class="ic" data-acc="anclar" aria-label="' + (n.anclada ? 'Despegar' : 'Anclar') + '" title="' + (n.anclada ? 'Despegar' : 'Anclar') + '"><i class="ti ' + (n.anclada ? 'ti-pinned-off' : 'ti-pin') + '"></i></button>' +
+      '<button class="ic' + (n.luz ? ' on' : '') + '" data-acc="luz" aria-label="Luz" title="Luz"><i class="ti ti-bulb"></i></button>' +
+      (n.origen_url ? '<button class="ic" data-acc="origen" aria-label="Ir a donde se escribió" title="Ir a donde se escribió"><i class="ti ti-external-link"></i></button>' : '') +
+      '<span class="esp"></span>' +
+      '<button class="ic" data-acc="papelera" aria-label="Enviar a la papelera" title="Enviar a la papelera"><i class="ti ti-trash"></i></button>' +
+    '</div></div>';
+}
+/** Grilla mampostería: columnas de distinta altura; la más nueva arriba a la izquierda y sigue en fila. */
+function columnas_() { const w = window.innerWidth; return w <= 860 ? 2 : w <= 1180 ? 3 : 4; }
+function htmlGrilla_(id, lista) {
+  const n = columnas_(), cols = Array.from({ length: n }, () => []);
+  lista.forEach((x, i) => cols[i % n].push(htmlNota_(x)));
+  return '<div class="grilla" id="' + id + '" data-cols="' + n + '">' + cols.map(c => '<div class="grilla-col">' + c.join('') + '</div>').join('') + '</div>';
+}
+let colsActual = columnas_(), resizeTimer = null;
+window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (columnas_() !== colsActual) { colsActual = columnas_(); if (uidActual) pintar_(); } }, 150); });
+function pintarFiltros_() {
+  const lista = conteoEtiquetas_();
+  const visibles = lista.slice(0, TOP_ETQ);
+  filtrosEtq.forEach(f => { if (!visibles.some(x => x.e === f)) { const x = lista.find(y => y.e === f) || { e: f, n: 0, auto: false }; visibles.push(x); } });
+  const resto = lista.length - visibles.length;
+  let html = visibles.map(x => '<button class="etq ' + (x.auto ? 'auto' : 'usr') + (filtrosEtq.includes(x.e) ? ' activa' : '') + '" data-filtro="' + escaparHtml(x.e) + '" aria-pressed="' + filtrosEtq.includes(x.e) + '">#' + escaparHtml(x.e) + '<span class="n">' + x.n + '</span></button>').join('');
+  if (resto > 0) html += '<button class="etq mas" id="btn-mas-etq">+' + resto + ' más</button>';
+  if (filtrosEtq.length) html += '<button class="etq mas" id="btn-limpiar-etq" title="Quitar filtros"><i class="ti ti-x"></i> Limpiar</button>';
+  const el = document.getElementById('filtros');
+  el.innerHTML = html;
+  el.classList.toggle('hidden', !lista.length && !filtrosEtq.length);
+}
+function pintar_() {
+  pintarFiltros_();
+  const lista = filtradas_();
+  const anc = lista.filter(n => n.anclada), otras = lista.filter(n => !n.anclada);
+  const el = document.getElementById('lista');
+  if (!lista.length) {
+    const hayAlgo = activas_().length > 0;
+    el.innerHTML = '<div class="vacio"><i class="ti ' + (hayAlgo ? 'ti-search-off' : 'ti-notes') + '"></i>' +
+      (hayAlgo ? 'No hay notas con ese filtro.' : (esCelular_() ? 'Tocá + para escribir tu primera nota.' : 'Escribí tu primera nota en la barra de arriba (o apretá C).')) + '</div>';
+  } else {
+    let html = '';
+    if (anc.length) html += '<div class="seccion-tit">Ancladas</div>' + htmlGrilla_('grilla-ancladas', anc);
+    if (otras.length) html += (anc.length ? '<div class="seccion-tit">Otras</div>' : '') + htmlGrilla_('grilla-otras', otras);
+    el.innerHTML = html;
+  }
+  nuevosIds.clear(); destelloId = null;
+  const enPap = Object.values(notas).filter(n => n.borrada_at).length;
+  const c = document.getElementById('cnt-papelera');
+  c.textContent = enPap; c.classList.toggle('hidden', !enPap);
+}
+
+// Clicks en filtros
+document.getElementById('filtros').addEventListener('click', e => {
+  const b = e.target.closest('[data-filtro]');
+  if (b) { const f = b.dataset.filtro; filtrosEtq = filtrosEtq.includes(f) ? filtrosEtq.filter(x => x !== f) : filtrosEtq.concat(f); pintar_(); return; }
+  if (e.target.closest('#btn-limpiar-etq')) { filtrosEtq = []; pintar_(); return; }
+  const mas = e.target.closest('#btn-mas-etq');
+  if (mas) abrirPopMas_(mas);
+});
+function abrirPopMas_(ancla) {
+  const pop = document.getElementById('pop');
+  pop.innerHTML = '<label class="pop-buscar"><i class="ti ti-search"></i><input id="pop-input" placeholder="Buscar etiqueta" aria-label="Buscar etiqueta" autocomplete="off"></label><div class="pop-lista" id="pop-lista"></div>';
+  const pintarL = () => {
+    const q = normEtq(document.getElementById('pop-input').value);
+    const todas = conteoEtiquetas_().filter(x => !q || x.e.includes(q));
+    document.getElementById('pop-lista').innerHTML = todas.length ? todas.map(x => '<button class="etq ' + (x.auto ? 'auto' : 'usr') + (filtrosEtq.includes(x.e) ? ' activa' : '') + '" data-f="' + escaparHtml(x.e) + '">#' + escaparHtml(x.e) + '<span class="n">' + x.n + '</span></button>').join('') : '<div class="pop-vacio">No hay etiquetas con ese nombre.</div>';
+  };
+  mostrarPop_(ancla, pop);
+  pintarL();
+  document.getElementById('pop-input').addEventListener('input', pintarL);
+  document.getElementById('pop-lista').addEventListener('click', e => {
+    const b = e.target.closest('[data-f]'); if (!b) return;
+    const f = b.dataset.f; filtrosEtq = filtrosEtq.includes(f) ? filtrosEtq.filter(x => x !== f) : filtrosEtq.concat(f);
+    cerrarPop_(); pintar_();
+  });
+  document.getElementById('pop-input').focus();
+}
+
+// Popover genérico (se ubica bajo el elemento)
+let popAncla = null;
+function mostrarPop_(ancla, pop) {
+  pop.classList.remove('hidden');
+  popAncla = ancla;
+  const r = ancla.getBoundingClientRect();
+  const ancho = pop.offsetWidth, alto = pop.offsetHeight;
+  let left = Math.min(Math.max(8, r.left), window.innerWidth - ancho - 8);
+  let top = r.bottom + 6;
+  if (top + alto > window.innerHeight - 8) top = Math.max(8, r.top - alto - 6);
+  pop.style.position = 'fixed'; pop.style.left = left + 'px'; pop.style.top = top + 'px';
+}
+function cerrarPop_() { const p = document.getElementById('pop'); p.classList.add('hidden'); p.innerHTML = ''; popAncla = null; }
+document.addEventListener('mousedown', e => {
+  const p = document.getElementById('pop');
+  if (!p.classList.contains('hidden') && !p.contains(e.target) && !(popAncla && popAncla.contains(e.target))) cerrarPop_();
+});
+function popColores_(ancla, actual, alElegir) {
+  const pop = document.getElementById('pop');
+  pop.innerHTML = '<div class="pop-colores" style="display:flex;gap:8px">' + COLORES.map(c => '<button class="punto-color' + (c === actual ? ' sel' : '') + '" data-c="' + c + '" style="background:' + COLOR_FUERTE[c] + '" aria-label="Color ' + c + '" title="' + c + '"></button>').join('') + '</div>';
+  pop.style.width = 'auto';
+  mostrarPop_(ancla, pop);
+  pop.querySelector('.pop-colores').addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (!b) return; cerrarPop_(); pop.style.width = ''; alElegir(b.dataset.c); });
+}
+
+// Clicks en las tarjetas
+document.getElementById('lista').addEventListener('click', e => {
+  const card = e.target.closest('.nota'); if (!card) return;
+  const n = notas[card.dataset.id]; if (!n) return;
+  const acc = e.target.closest('[data-acc]');
+  if (!acc) { abrirNota_(n.id); return; }
+  e.stopPropagation();
+  switch (acc.dataset.acc) {
+    case 'color': popColores_(acc, n.color, c => { guardarNota_(n, { color: c }); pintar_(); }); break;
+    case 'etiqueta': abrirNota_(n.id, true); break;
+    case 'copiar': copiar_(n.texto); break;
+    case 'anclar': anclar_(n); break;
+    case 'luz': guardarNota_(n, { luz: !n.luz }); pintar_(); break;
+    case 'origen': irOrigen_(n); break;
+    case 'papelera': aPapelera_(n); break;
+  }
+});
+document.getElementById('lista').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('nota')) abrirNota_(e.target.dataset.id);
+});
+function anclar_(n) {
+  guardarNota_(n, { anclada: !n.anclada });
+  destelloId = n.id;
+  registrarActividad_(n.anclada ? 'anclar' : 'despegar', n.id, 'OK');
+  pintar_();
+}
+async function copiar_(t) {
+  try { await navigator.clipboard.writeText(t || ''); aviso('Texto copiado'); }
+  catch (e) {
+    const ta = document.createElement('textarea'); ta.value = t || ''; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); aviso('Texto copiado'); } catch (e2) { aviso('No se pudo copiar'); }
+    ta.remove();
+  }
+}
+function irOrigen_(n) { if (n.origen_url && /^https?:\/\//i.test(n.origen_url)) { subir_(); location.href = n.origen_url; } }
+function aPapelera_(n) {
+  guardarNota_(n, { borrada_at: new Date().toISOString() });
+  registrarActividad_('papelera', n.id, 'OK');
+  pintar_();
+  aviso('Nota enviada a la papelera', 'DESHACER', () => { guardarNota_(n, { borrada_at: null }); nuevosIds.add(n.id); pintar_(); });
+}
+
+// Buscar
+const inpBuscar = document.getElementById('input-buscar');
+let buscarTimer = null;
+inpBuscar.addEventListener('input', () => { clearTimeout(buscarTimer); buscarTimer = setTimeout(() => { textoBuscar = inpBuscar.value.trim(); pintar_(); }, 150); });
+inpBuscar.addEventListener('keydown', e => { if (e.key === 'Escape') { inpBuscar.value = ''; textoBuscar = ''; pintar_(); inpBuscar.blur(); } });
+document.getElementById('btn-buscar-cel').addEventListener('click', () => {
+  const h = document.getElementById('app-header'); h.classList.toggle('buscando');
+  if (h.classList.contains('buscando')) inpBuscar.focus(); else { inpBuscar.value = ''; textoBuscar = ''; pintar_(); }
+});
+
+// ══════════════════════════════════════════════════════════════
+// BARRA "Escribí una nota…" (compu): un clic y escribís
+// ══════════════════════════════════════════════════════════════
+const barra = document.getElementById('barra-nueva'), barraTxt = document.getElementById('barra-texto');
+function abrirBarra_() {
+  barra.classList.add('abierta');
+  barraId = null; barraColor = 'amarillo'; barraAnclada = false;
+  pintarBarra_();
+  barraTxt.value = ''; barraTxt.focus();
+}
+function pintarBarra_() {
+  const abierta = barra.classList.contains('abierta');
+  barra.className = 'barra-nueva' + (abierta ? ' abierta c-' + barraColor : '');
+  document.getElementById('barra-anclar').innerHTML = '<i class="ti ' + (barraAnclada ? 'ti-pinned-off' : 'ti-pin') + '"></i>';
+  document.getElementById('barra-anclar').title = barraAnclada ? 'Despegar' : 'Anclar';
+  pintarEstadoBarra_();
+}
+function pintarEstadoBarra_() {
+  const el = document.getElementById('barra-estado');
+  if (!barraId) { el.textContent = ''; return; }
+  el.innerHTML = cola[barraId] ? (navigator.onLine ? 'Guardando…' : '<i class="ti ti-cloud-upload"></i> Guardada en este equipo') : '<i class="ti ti-check"></i> Guardada';
+}
+let barraTimer = null;
+barraTxt.addEventListener('input', () => {
+  clearTimeout(barraTimer);
+  barraTimer = setTimeout(guardarBarra_, 400);
+});
+function guardarBarra_() {
+  clearTimeout(barraTimer);
+  const t = barraTxt.value;
+  if (!barraId) {
+    if (!t.trim()) return;
+    const n = nuevaNota_({ color: barraColor, anclada: barraAnclada });
+    barraId = n.id;
+    guardarNota_(n, { texto: t });
+    registrarActividad_('nota_crear', n.id, 'OK', { via: 'barra', pwa: CTX.pwa });
+  } else if (notas[barraId]) {
+    guardarNota_(notas[barraId], { texto: t, color: barraColor, anclada: barraAnclada });
+  }
+  pintarEstadoBarra_();
+}
+function cerrarBarra_() {
+  if (!barra.classList.contains('abierta')) return;
+  guardarBarra_();
+  const id = barraId;
+  barra.classList.remove('abierta'); barra.className = 'barra-nueva'; barraId = null;
+  if (id && notas[id]) { if (!(notas[id].texto || '').trim()) { delete notas[id]; delete cola[id]; guardarEquipo_(); } else nuevosIds.add(id); }
+  pintar_();
+}
+document.getElementById('barra-fila').addEventListener('click', abrirBarra_);
+document.getElementById('barra-fila').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirBarra_(); } });
+document.getElementById('barra-listo').addEventListener('click', cerrarBarra_);
+document.getElementById('barra-color').addEventListener('click', e => popColores_(e.currentTarget, barraColor, c => { barraColor = c; pintarBarra_(); if (barraId) guardarBarra_(); barraTxt.focus(); }));
+document.getElementById('barra-anclar').addEventListener('click', () => { barraAnclada = !barraAnclada; pintarBarra_(); if (barraId) guardarBarra_(); barraTxt.focus(); });
+document.getElementById('barra-abrir').addEventListener('click', () => {
+  guardarBarra_();
+  if (!barraId) { const n = nuevaNota_({ color: barraColor, anclada: barraAnclada }); notas[n.id] = n; barraId = n.id; abiertaNueva = true; }
+  const id = barraId; barra.classList.remove('abierta'); barra.className = 'barra-nueva'; barraId = null;
+  abrirNota_(id);
+});
+barraTxt.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); cerrarBarra_(); } });
+document.addEventListener('mousedown', e => {
+  if (barra.classList.contains('abierta') && !barra.contains(e.target) && !document.getElementById('pop').contains(e.target)) cerrarBarra_();
+});
+
+// ══════════════════════════════════════════════════════════════
+// NOTA ABIERTA (pantalla completa)
+// ══════════════════════════════════════════════════════════════
+const full = document.getElementById('nota-full'), fullTxt = document.getElementById('nf-texto');
+function abrirNueva_() {
+  const n = nuevaNota_();
+  notas[n.id] = n;           // todavía no se guarda: recién con el primer texto
+  abiertaNueva = true;
+  abrirNota_(n.id);
+}
+function abrirNota_(id, conEtiqueta) {
+  const n = notas[id]; if (!n) return;
+  cerrarPop_();
+  abiertaId = id;
+  if (!cola[id] && !(n.texto || '').trim()) abiertaNueva = true;
+  fullTxt.value = n.texto || '';
+  pintarFull_();
+  full.classList.add('visible');
+  document.body.style.overflow = 'hidden';
+  if (!esCelular_() || abiertaNueva) { fullTxt.focus(); fullTxt.setSelectionRange(fullTxt.value.length, fullTxt.value.length); }
+  if (conEtiqueta) setTimeout(() => { const b = document.getElementById('btn-nf-etq'); if (b) abrirPopEtq_(b); }, 60);
+  if (esCelular_()) { try { history.pushState({ nota: id }, ''); } catch (e) { /* nada */ } }
+}
+function pintarFull_() {
+  const n = notas[abiertaId]; if (!n) return;
+  full.className = 'visible c-' + n.color;
+  document.getElementById('nf-colores').innerHTML = COLORES.map(c => '<button class="punto-color' + (c === n.color ? ' sel' : '') + '" data-c="' + c + '" style="background:' + COLOR_FUERTE[c] + '" aria-label="Color ' + c + '" title="' + c + '"></button>').join('');
+  const luz = document.getElementById('nf-luz');
+  luz.className = 'luz ' + (n.luz ? 'on' : 'off'); luz.title = n.luz ? 'Luz prendida (tocá para apagar)' : 'Luz apagada (tocá para prender)';
+  luz.setAttribute('aria-pressed', !!n.luz);
+  const anc = document.getElementById('nf-anclar');
+  anc.innerHTML = '<i class="ti ' + (n.anclada ? 'ti-pinned-off' : 'ti-pin') + '"></i>'; anc.title = n.anclada ? 'Despegar' : 'Anclar'; anc.setAttribute('aria-label', anc.title);
+  const auto = n.etiquetas_auto || [];
+  document.getElementById('nf-etqs').innerHTML =
+    auto.map(e => htmlEtq_(e, true)).join('') +
+    (n.etiquetas || []).filter(e => !auto.includes(e)).map(e => '<span class="etq usr">#' + escaparHtml(e) + '<button class="quitar" data-quitar="' + escaparHtml(e) + '" aria-label="Quitar etiqueta ' + escaparHtml(e) + '" title="Quitar">×</button></span>').join('') +
+    '<button class="btn-etq" id="btn-nf-etq"><i class="ti ti-plus"></i> etiqueta</button>';
+  pintarInfoFull_();
+}
+function pintarInfoFull_() {
+  const n = notas[abiertaId]; if (!n) return;
+  const vacia = !(n.texto || '').trim() && !cola[n.id];
+  const estado = vacia ? '' : (cola[n.id] ? (navigator.onLine ? '<span class="nf-estado pend"><i class="ti ti-loader-2"></i> Guardando…</span>' : '<span class="nf-estado pend"><i class="ti ti-cloud-upload"></i> Guardada en este equipo, se sube sola</span>') : '<span class="nf-estado ok"><i class="ti ti-check"></i> Guardado</span>');
+  const nombrePwa = n.pwa && n.pwa !== 'anotador' ? 'en ' + escaparHtml(n.pwa) : '';
+  const enlace = n.origen_url && /^https?:\/\//i.test(n.origen_url) ? '<a href="' + escaparHtml(n.origen_url) + '" id="nf-origen"><i class="ti ti-external-link"></i> ' + (n.vale ? 'Volver al vale ' + escaparHtml(n.vale) : 'Volver a donde se escribió') + '</a>' : '';
+  document.getElementById('nf-info').innerHTML = '<span>Creada el ' + fechaLarga(n.creada) + '</span>' + (nombrePwa ? '<span>·</span><span>' + nombrePwa + '</span>' : '') + enlace + estado;
+}
+let fullTimer = null;
+fullTxt.addEventListener('input', () => { clearTimeout(fullTimer); fullTimer = setTimeout(guardarFull_, 400); });
+function guardarFull_() {
+  clearTimeout(fullTimer);
+  const n = notas[abiertaId]; if (!n) return;
+  const t = fullTxt.value;
+  if (t === n.texto) return;
+  if (abiertaNueva && !cola[n.id] && !t.trim()) return;
+  if (abiertaNueva && !cola[n.id]) registrarActividad_('nota_crear', n.id, 'OK', { via: 'abierta', pwa: CTX.pwa });
+  guardarNota_(n, { texto: t });
+  pintarFull_();
+}
+function cambiarFull_(cambios) {
+  const n = notas[abiertaId]; if (!n) return;
+  guardarFull_();
+  if (abiertaNueva && !cola[n.id] && !(n.texto || '').trim()) { Object.assign(n, cambios); pintarFull_(); return; }   // sin texto todavía: se guarda junto con el texto
+  guardarNota_(n, cambios); pintarFull_();
+}
+function cerrarFull_(porAtras) {
+  if (!abiertaId) return;
+  guardarFull_();
+  cerrarPop_();
+  const n = notas[abiertaId], id = abiertaId;
+  abiertaId = null;
+  full.classList.remove('visible'); full.className = '';
+  document.body.style.overflow = '';
+  if (n && !(n.texto || '').trim()) {
+    if (!cola[id] && abiertaNueva) delete notas[id];         // nota nueva vacía: no se guarda
+    else if (!n.borrada_at) { abiertaNueva = false; aPapelera_(n); return finCerrar_(porAtras); }   // la vaciaste: va a la papelera (con Deshacer)
+  } else if (n && abiertaNueva) nuevosIds.add(id);
+  abiertaNueva = false;
+  pintar_();
+  finCerrar_(porAtras);
+  subir_();
+}
+function finCerrar_(porAtras) { if (esCelular_() && !porAtras && history.state && history.state.nota) { try { history.back(); } catch (e) { /* nada */ } } }
+window.addEventListener('popstate', () => { if (abiertaId) cerrarFull_(true); });
+document.getElementById('nf-volver').addEventListener('click', () => cerrarFull_(false));
+document.getElementById('nf-colores').addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (b) cambiarFull_({ color: b.dataset.c }); });
+document.getElementById('nf-luz').addEventListener('click', () => { const n = notas[abiertaId]; if (n) cambiarFull_({ luz: !n.luz }); });
+document.getElementById('nf-anclar').addEventListener('click', () => { const n = notas[abiertaId]; if (n) { cambiarFull_({ anclada: !n.anclada }); destelloId = n.id; aviso(n.anclada ? 'Anclada: queda arriba' : 'Despegada'); } });
+document.getElementById('nf-copiar').addEventListener('click', () => copiar_(fullTxt.value));
+document.getElementById('nf-papelera').addEventListener('click', () => {
+  const n = notas[abiertaId]; if (!n) return;
+  guardarFull_();
+  const id = abiertaId;
+  abiertaId = null; full.classList.remove('visible'); full.className = ''; document.body.style.overflow = '';
+  if (!cola[id] && !(n.texto || '').trim()) { delete notas[id]; pintar_(); }
+  else aPapelera_(n);
+  abiertaNueva = false;
+  finCerrar_(false);
+});
+document.getElementById('nf-etqs').addEventListener('click', e => {
+  const q = e.target.closest('[data-quitar]');
+  if (q) {
+    const n = notas[abiertaId]; if (!n) return;
+    const et = q.dataset.quitar;
+    guardarFull_();
+    // si la etiqueta vino de un #algo del texto, se le saca el # (la palabra queda)
+    const t2 = (n.texto || '').replace(/(^|[\s(])#([\p{L}\p{N}_\-]{2,40})/gu, (m, a, w) => normEtq(w) === et ? a + w : m);
+    fullTxt.value = t2;
+    cambiarFull_({ texto: t2, etiquetas: (n.etiquetas || []).filter(x => x !== et) });
+    return;
+  }
+  const b = e.target.closest('#btn-nf-etq'); if (b) abrirPopEtq_(b);
+});
+function abrirPopEtq_(ancla) {
+  const pop = document.getElementById('pop');
+  pop.innerHTML = '<label class="pop-buscar"><i class="ti ti-tag"></i><input id="pop-input" placeholder="Escribí o elegí una etiqueta" aria-label="Nombre de la etiqueta" autocomplete="off"></label><div class="pop-opciones" id="pop-op"></div>';
+  mostrarPop_(ancla, pop);
+  let sel = 0, ops = [];
+  const pintarOp = () => {
+    const n = notas[abiertaId]; if (!n) return;
+    const q = normEtq(document.getElementById('pop-input').value);
+    const ya = new Set(todasEtq_(n));
+    const exist = conteoEtiquetas_().filter(x => !x.auto && !ya.has(x.e) && (!q || x.e.includes(q)));
+    ops = exist.slice(0, 8).map(x => ({ e: x.e, n: x.n, crear: false }));
+    if (q && !ya.has(q) && !exist.some(x => x.e === q)) ops.push({ e: q, crear: true });
+    if (sel >= ops.length) sel = 0;
+    document.getElementById('pop-op').innerHTML = ops.length ? ops.map((o, i) => '<button class="pop-op' + (i === sel ? ' sel' : '') + '" data-i="' + i + '">' +
+      (o.crear ? '<span><i class="ti ti-plus"></i> Crear <b>#' + escaparHtml(o.e) + '</b></span>' : '<span class="etq usr">#' + escaparHtml(o.e) + '</span><span class="cnt">' + o.n + (o.n === 1 ? ' nota' : ' notas') + '</span>') + '</button>').join('')
+      : '<div class="pop-vacio">' + (q ? 'Ya tiene esa etiqueta.' : 'Escribí el nombre de una etiqueta nueva.') + '</div>';
+  };
+  const elegir = i => {
+    const o = ops[i]; if (!o) return;
+    const n = notas[abiertaId]; if (!n) return;
+    cambiarFull_({ etiquetas: normLista((n.etiquetas || []).concat(o.e)) });
+    cerrarPop_();
+    setTimeout(() => { const b = document.getElementById('btn-nf-etq'); if (b) b.focus(); }, 0);
+  };
+  pintarOp();
+  const inp = document.getElementById('pop-input');
+  inp.addEventListener('input', () => { sel = 0; pintarOp(); });
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(ops.length - 1, sel + 1); pintarOp(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(0, sel - 1); pintarOp(); }
+    else if (e.key === 'Enter') { e.preventDefault(); elegir(sel); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cerrarPop_(); }
+  });
+  document.getElementById('pop-op').addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) elegir(+b.dataset.i); });
+  inp.focus();
+}
+document.getElementById('nf-info').addEventListener('click', e => {
+  if (e.target.closest('#nf-origen')) { e.preventDefault(); const n = notas[abiertaId]; guardarFull_(); if (n) irOrigen_(n); }
+});
+
+// ══════════════════════════════════════════════════════════════
+// PAPELERA
+// ══════════════════════════════════════════════════════════════
+function abrirPapelera_() { pintarPapelera_(); document.getElementById('papelera-overlay').classList.add('visible'); }
+function cerrarPapelera_() { document.getElementById('papelera-overlay').classList.remove('visible'); }
+function pintarPapelera_() {
+  const lista = Object.values(notas).filter(n => n.borrada_at).sort((a, b) => Date.parse(b.borrada_at) - Date.parse(a.borrada_at));
+  document.getElementById('pap-lista').innerHTML = lista.length ? '<div style="font-size:.76rem;color:var(--muted2);margin-bottom:2px">Las notas se borran solas a los ' + PAPELERA_DIAS + ' días. Mientras tanto, se pueden restaurar.</div>' +
+    lista.map(n => {
+      const quedan = Math.max(0, Math.ceil(PAPELERA_DIAS - (Date.now() - Date.parse(n.borrada_at)) / 86400000));
+      return '<div class="pap-item c-' + n.color + '"><div style="flex:1;min-width:0"><div class="pap-txt">' + escaparHtml(n.texto) + '</div>' +
+        '<div class="pap-meta">Creada el ' + fechaCorta(n.creada) + ' · se borra en ' + quedan + (quedan === 1 ? ' día' : ' días') + '</div></div>' +
+        '<button class="btn-chico sec" data-restaurar="' + n.id + '"><i class="ti ti-restore"></i> Restaurar</button></div>';
+    }).join('') : '<div class="vacio"><i class="ti ti-trash"></i>La papelera está vacía.</div>';
+}
+document.getElementById('btn-papelera').addEventListener('click', abrirPapelera_);
+document.getElementById('pap-cerrar').addEventListener('click', cerrarPapelera_);
+document.getElementById('papelera-overlay').addEventListener('click', e => { if (e.target.id === 'papelera-overlay') cerrarPapelera_(); });
+document.getElementById('pap-lista').addEventListener('click', e => {
+  const b = e.target.closest('[data-restaurar]'); if (!b) return;
+  const n = notas[b.dataset.restaurar]; if (!n) return;
+  guardarNota_(n, { borrada_at: null });
+  registrarActividad_('restaurar', n.id, 'OK');
+  nuevosIds.add(n.id);
+  pintarPapelera_(); pintar_();
+  aviso('Nota restaurada');
+});
+
+// ══════════════════════════════════════════════════════════════
+// TECLADO (compu): C nota nueva · / buscar · Esc cerrar
+// ══════════════════════════════════════════════════════════════
+function escribiendo_(el) { return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable); }
+document.addEventListener('keydown', e => {
+  if (document.getElementById('app').style.display !== 'flex') return;
+  if (e.key === 'Escape') {
+    if (!document.getElementById('pop').classList.contains('hidden')) { cerrarPop_(); return; }
+    if (document.getElementById('dialogo-overlay').classList.contains('visible')) return;
+    if (document.getElementById('session-dialog-overlay').classList.contains('visible')) { document.getElementById('session-dialog-overlay').classList.remove('visible'); return; }
+    if (document.getElementById('papelera-overlay').classList.contains('visible')) { cerrarPapelera_(); return; }
+    if (abiertaId) { cerrarFull_(false); return; }
+    if (barra.classList.contains('abierta')) { cerrarBarra_(); return; }
+    return;
+  }
+  if (e.ctrlKey && e.altKey && (e.key === 'u' || e.key === 'U')) { e.preventDefault(); abrirSesion_(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey || escribiendo_(document.activeElement) || abiertaId) return;
+  if (e.key === 'c' || e.key === 'C') { e.preventDefault(); if (esCelular_()) abrirNueva_(); else abrirBarra_(); }
+  else if (e.key === '/') { e.preventDefault(); if (esCelular_()) document.getElementById('app-header').classList.add('buscando'); inpBuscar.focus(); }
+});
+document.getElementById('fab').addEventListener('click', abrirNueva_);
+window.addEventListener('pagehide', () => { if (abiertaId) guardarFull_(); if (barraId) guardarBarra_(); });
+MQ_CEL.addEventListener && MQ_CEL.addEventListener('change', () => { if (uidActual) pintar_(); });
+
+// ── INSTALABLE ──
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  navigator.serviceWorker.register('sw.js').catch(err => console.warn('[sw] no registrado:', err.message));
+}
+window.addEventListener('DOMContentLoaded', boot);
+</script>
+</body>
+</html>

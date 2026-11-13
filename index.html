@@ -18,6 +18,16 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <!--
+  Anotador v1.2.0 (13-nov-2026) — Etapa 3: modo ventana (lo abre anotador.js desde otra PWA). Sin SQL nuevo.
+  · ?embed=1 dentro de un iframe: no pide código. La PWA que lo abre le presta su sesión (token por
+    postMessage, mismo sitio goeapp.github.io) y es la única que la renueva; el Anotador nunca la renueva.
+  · Recibe la PWA, la obra, el vale y la dirección para volver cada vez que se abre (etiquetas automáticas
+    y enlace "Volver al vale").
+  · La ✕ del encabezado y Esc cierran la ventana. "Volver al vale" cierra y lleva a esa dirección.
+  · Sin sesión de la PWA a los 10 s: avisa que hay que abrirlo desde una app de la suite.
+  · Fuera de un iframe funciona igual que la v1.1.0 (con su propio login).
+-->
+<!--
   Anotador v1.1.0 (13-nov-2026) — Etapa 2: Pizarrón (solo compu). Sin SQL nuevo (usa pz_x, pz_y de v1.0.0).
   · Pestañas Notas | Pizarrón en el encabezado (compu). En el celular no aparecen.
   · Barra lateral plegable con las ancladas que no están en el corcho. Se arrastran al corcho y quedan
@@ -442,6 +452,7 @@ body.modo-pz #pizarron { display: flex; }
     <button class="hdr-ic" id="btn-buscar-cel" aria-label="Buscar"><i class="ti ti-search"></i></button>
     <button class="hdr-ic" id="btn-papelera" aria-label="Papelera" title="Papelera"><i class="ti ti-trash"></i><span class="cnt hidden" id="cnt-papelera"></span></button>
     <button class="hdr-email" id="hdr-email" title="Sesión"></button>
+    <button class="hdr-ic hidden" id="btn-cerrar-embed" aria-label="Cerrar el Anotador (Esc)" title="Cerrar (Esc)"><i class="ti ti-x"></i><span class="txt-instalar">Esc</span></button>
   </header>
 
   <main id="main">
@@ -523,15 +534,21 @@ body.modo-pz #pizarron { display: flex; }
 
 <script>
 // ============================================================
-// Anotador — index_anotador_v1_1_0.html  (subir como index.html al repo goeapp/anotador)
+// Anotador — index_anotador_v1_2_0.html  (subir como index.html al repo goeapp/anotador)
 // ============================================================
-const APP_VERSION   = 'v1.1.0';
+const APP_VERSION   = 'v1.2.0';
 const SUPABASE_URL  = 'https://uhuftsxrzwhmvzygcuvp.supabase.co';
 const SUPABASE_KEY  = 'sb_publishable_TCibRAnzgaDIbn_MIirw6w_FltKG8X3';
 const REDIRECT_MAIL = 'https://goeapp.github.io/anotador/';
-const sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, storageKey: 'an-sb-auth' }
-}) : null;
+// v1.2.0 — modo ventana: abierto por anotador.js dentro de otra PWA (mismo sitio)
+const EMBED = new URLSearchParams(location.search).get('embed') === '1' && window.parent !== window;
+let tokenActual = null;
+const sb = !window.supabase ? null : EMBED
+  // Sesión prestada: el token lo da la PWA (que es la única que lo renueva). Este cliente no lo guarda ni lo renueva.
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { accessToken: async () => tokenActual })
+  : window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true, storageKey: 'an-sb-auth' }
+    });
 const COOLDOWN_SEG = 60;
 const SESION_ID = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'S' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 const SESION_KEY = 'an_sesion';
@@ -549,7 +566,7 @@ document.getElementById('sd-version').textContent = APP_VERSION;
 
 // ── CONTEXTO (lo pasa la PWA que abre el Anotador; Etapa 3) ──
 const PARAMS = new URLSearchParams(location.search);
-const CTX = {
+const CTX = {   // v1.2.0: en modo ventana se actualiza cada vez que se abre (an-contexto)
   pwa:   normEtq(PARAMS.get('pwa') || 'anotador'),
   obra:  (PARAMS.get('obra') || '').trim() || null,
   vale:  (PARAMS.get('vale') || '').trim() || null,
@@ -1126,7 +1143,12 @@ async function copiar_(t) {
     ta.remove();
   }
 }
-function irOrigen_(n) { if (n.origen_url && /^https?:\/\//i.test(n.origen_url)) { subir_(); location.href = n.origen_url; } }
+function irOrigen_(n) {
+  if (!n.origen_url || !/^https?:\/\//i.test(n.origen_url)) return;
+  subir_();
+  if (EMBED) { window.parent.postMessage({ tipo: 'an-ir', url: n.origen_url }, location.origin); return; }   // la PWA cierra la ventana y va
+  location.href = n.origen_url;
+}
 function aPapelera_(n) {
   guardarNota_(n, { borrada_at: new Date().toISOString() });
   registrarActividad_('papelera', n.id, 'OK');
@@ -1403,6 +1425,7 @@ document.addEventListener('keydown', e => {
     if (document.getElementById('papelera-overlay').classList.contains('visible')) { cerrarPapelera_(); return; }
     if (abiertaId) { cerrarFull_(false); return; }
     if (barra.classList.contains('abierta')) { cerrarBarra_(); return; }
+    if (EMBED) cerrarEmbed_();
     return;
   }
   if (e.ctrlKey && e.altKey && (e.key === 'u' || e.key === 'U')) { e.preventDefault(); abrirSesion_(); return; }
@@ -1601,10 +1624,72 @@ document.getElementById('btn-instalar').addEventListener('click', async () => {
   promptInstalar = null;
   document.getElementById('btn-instalar').classList.add('hidden');
 });
-if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+if (!EMBED && 'serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch(err => console.warn('[sw] no registrado:', err.message));
 }
-window.addEventListener('DOMContentLoaded', boot);
+// ══════════════════════════════════════════════════════════════
+// MODO VENTANA (v1.2.0) — sesión prestada por la PWA
+// ══════════════════════════════════════════════════════════════
+function datosToken_(t) {
+  try {
+    const p = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = decodeURIComponent(atob(p + '==='.slice((p.length + 3) % 4)).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+    return JSON.parse(json);
+  } catch (e) { return null; }
+}
+let embedTimer = null;
+async function bootEmbed_() {
+  document.body.classList.add('embed');
+  ['btn-atras', 'hdr-email', 'btn-instalar'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+  document.getElementById('btn-cerrar-embed').classList.remove('hidden');
+  mostrarPantalla('login'); mostrarPasoLogin('validando');
+  window.addEventListener('message', e => {
+    if (e.origin !== location.origin || e.source !== window.parent) return;
+    const d = e.data || {};
+    if (d.tipo === 'an-sesion' && d.access_token) recibirSesion_(d.access_token);
+    else if (d.tipo === 'an-contexto') aplicarContexto_(d);
+  });
+  window.parent.postMessage({ tipo: 'an-listo' }, location.origin);
+  embedTimer = setTimeout(() => {
+    if (uidActual) return;
+    document.getElementById('texto-error-auth').textContent = 'El Anotador se abre desde una app de la suite (por ejemplo Vale Digital), con la sesión de esa app.';
+    document.getElementById('btn-volver-email').style.display = 'none';
+    mostrarPasoLogin('error-auth');
+  }, 10000);
+}
+async function recibirSesion_(token) {
+  tokenActual = token;
+  try { if (sb.realtime && sb.realtime.setAuth) sb.realtime.setAuth(token); } catch (e) { /* nada */ }
+  if (uidActual) return;                                             // ya entró: solo se renovó el token
+  const t = datosToken_(token);
+  if (!t || !t.sub) return;
+  let ok = true, nombre = t.email || '';
+  if (navigator.onLine) {
+    try {
+      const r = await sb.rpc('goe_mi_persona');
+      if (r.error) throw new Error(r.error.message);
+      ok = !!r.data;
+    } catch (e) { console.warn('[embed] persona', e && e.message); }
+  }
+  clearTimeout(embedTimer);
+  if (!ok) { mostrarTextoErrorAuth('no_encontrado'); document.getElementById('btn-volver-email').style.display = 'none'; mostrarPasoLogin('error-auth'); return; }
+  await entrar_({ email: String(t.email || '').toLowerCase(), uid: t.sub, nombreApellido: nombre }, 'ventana');
+}
+function aplicarContexto_(d) {
+  CTX.pwa = normEtq(d.pwa || 'anotador') || 'anotador';
+  CTX.obra = d.obra ? String(d.obra) : null;
+  CTX.vale = d.vale ? String(d.vale) : null;
+  CTX.volver = d.volver || null;
+  if (d.nueva && uidActual) abrirNueva_();
+}
+function cerrarEmbed_() {
+  if (abiertaId) cerrarFull_(false);
+  cerrarBarra_(); cerrarPop_();
+  subir_();
+  window.parent.postMessage({ tipo: 'an-cerrar' }, location.origin);
+}
+document.getElementById('btn-cerrar-embed').addEventListener('click', cerrarEmbed_);
+window.addEventListener('DOMContentLoaded', () => { if (EMBED) bootEmbed_(); else boot(); });
 </script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 /* ============================================================
-   anotador.js — v1.0.1 (13-nov-2026) · subir como anotador.js al repo goeapp/anotador
+   anotador.js — v1.0.2 (13-nov-2026) · subir como anotador.js al repo goeapp/anotador
+   v1.0.2 — Botón solo con el ícono (ocupa menos lugar); el nombre queda en el aviso al pasar el mouse.
    v1.0.1 — Libreta en tiempo real: mientras está abierta, lo que se crea, borra o edita en otro equipo
             aparece o desaparece solo. Al volver a la app (desbloquear el celular) se actualiza sola.
    v1.0.0 — primera versión
@@ -21,7 +22,7 @@
 (function () {
   'use strict';
   if (window.Anotador) return;
-  const VERSION = 'v1.0.1';
+  const VERSION = 'v1.0.2';
   const BASE = 'https://goeapp.github.io/anotador/';
   const ORIGEN = new URL(BASE).origin;
   const CEL = window.matchMedia ? window.matchMedia('(max-width: 560px)') : { matches: false };
@@ -60,7 +61,8 @@
   // ── estilos (todo con prefijo an-) ──
   function estilos() {
     const css = `
-.an-btn { display:inline-flex; align-items:center; gap:6px; }
+.an-btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+.an-btn .an-btn-txt { display:none; }
 .an-ov { position:fixed; inset:0; z-index:99000; background:rgba(15,23,42,.55); display:none; align-items:center; justify-content:center; }
 .an-ov.an-vis { display:flex; animation:an-entra .18s ease-out; }
 .an-ov iframe { width:min(1280px, 94vw); height:min(880px, 92vh); border:0; border-radius:16px; box-shadow:0 30px 80px rgba(0,0,0,.45); background:#f8fafc; }
@@ -99,7 +101,7 @@
     b.type = 'button'; b.id = 'an-btn';
     b.className = (op.claseBoton || 'hdr-btn') + ' an-btn';
     b.title = 'Anotador — tus notas'; b.setAttribute('aria-label', 'Anotador');
-    b.innerHTML = ICONO + '<span class="an-btn-txt">Anotador</span>';
+    b.innerHTML = ICONO + '<span class="an-btn-txt">Anotador</span>';   // v1.0.2: el texto queda oculto (solo ícono)
     b.addEventListener('click', abrir);
     const ref = op.despuesDe && document.querySelector(op.despuesDe);
     if (ref && ref.parentNode) ref.parentNode.insertBefore(b, ref.nextSibling);

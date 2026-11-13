@@ -12,10 +12,18 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Anotador">
 <link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<!--
+  Anotador v1.0.1 (13-nov-2026) — puesta en marcha (requiere an_esquema_v1_0_1.sql y sw_v1_0_1.js):
+  · Botón Instalar en el encabezado (como Vale Digital): aparece cuando el navegador lo ofrece.
+  · Favicon (el ícono del Anotador en la pestaña del navegador).
+  · La actividad ya se registra: an_esquema_v1_0_1.sql suma la regla de goe_actividad para la app an,
+    y registra el Anotador en goe_apps (el mail del código dice ANOTADOR).
+-->
 <!--
   Anotador v1.0.0 (13-nov-2026) — Etapa 1: base + vista Notas (compu y celular).
   Requiere an_esquema_v1_0_0.sql. Subir como index.html al repo goeapp/anotador
@@ -111,6 +119,7 @@ input, select, textarea { font-family: inherit; }
 .hdr-ic { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 32px; height: 32px; border-radius: var(--radius-sm); background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); color: rgba(255,255,255,.8); font-size: 1rem; padding: 0 8px; }
 .hdr-ic:hover { border-color: var(--accent); color: var(--accent); }
 .hdr-ic .cnt { font-size: .68rem; font-weight: 700; }
+.txt-instalar { font-size: .74rem; font-weight: 600; }
 .hdr-email { font-size: .72rem; color: rgba(255,255,255,.45); white-space: nowrap; cursor: pointer; background: none; border: 0; }
 .hdr-email:hover { color: #fff; }
 
@@ -263,7 +272,7 @@ button.luz { cursor: pointer; padding: 0; }
   .hdr-buscar { display: none; order: 10; width: 100%; }
   #app-header.buscando .hdr-buscar { display: flex; }
   #app-header { flex-wrap: wrap; }
-  .pill-senal .txt { display: none; }
+  .pill-senal .txt, .txt-instalar { display: none; }
   .hdr-ic { width: 44px; height: 44px; background: transparent; border: 0; font-size: 1.25rem; }
   #btn-buscar-cel { display: inline-flex !important; }
   main { padding: 12px 12px 100px; gap: 10px; }
@@ -346,6 +355,7 @@ button.luz { cursor: pointer; padding: 0; }
     <span class="hdr-sep"></span>
     <span class="pill-senal hidden" id="pill-senal" title="Sin señal: lo que escribas se guarda en este equipo y se sube solo"><i class="ti ti-wifi-off"></i><span class="txt">Sin señal</span></span>
     <span class="ic-nube hidden" id="ic-nube" title=""><i class="ti ti-cloud-upload"></i></span>
+    <button class="hdr-ic hidden" id="btn-instalar" aria-label="Instalar el Anotador en este equipo" title="Instalar el Anotador en este equipo"><i class="ti ti-download"></i><span class="txt-instalar">Instalar</span></button>
     <button class="hdr-ic" id="btn-buscar-cel" aria-label="Buscar"><i class="ti ti-search"></i></button>
     <button class="hdr-ic" id="btn-papelera" aria-label="Papelera" title="Papelera"><i class="ti ti-trash"></i><span class="cnt hidden" id="cnt-papelera"></span></button>
     <button class="hdr-email" id="hdr-email" title="Sesión"></button>
@@ -419,9 +429,9 @@ button.luz { cursor: pointer; padding: 0; }
 
 <script>
 // ============================================================
-// Anotador — index_anotador_v1_0_0.html  (subir como index.html al repo goeapp/anotador)
+// Anotador — index_anotador_v1_0_1.html  (subir como index.html al repo goeapp/anotador)
 // ============================================================
-const APP_VERSION   = 'v1.0.0';
+const APP_VERSION   = 'v1.0.1';
 const SUPABASE_URL  = 'https://uhuftsxrzwhmvzygcuvp.supabase.co';
 const SUPABASE_KEY  = 'sb_publishable_TCibRAnzgaDIbn_MIirw6w_FltKG8X3';
 const REDIRECT_MAIL = 'https://goeapp.github.io/anotador/';
@@ -1303,7 +1313,26 @@ document.getElementById('fab').addEventListener('click', abrirNueva_);
 window.addEventListener('pagehide', () => { if (abiertaId) guardarFull_(); if (barraId) guardarBarra_(); });
 MQ_CEL.addEventListener && MQ_CEL.addEventListener('change', () => { if (uidActual) pintar_(); });
 
-// ── INSTALABLE ──
+// ── INSTALABLE (botón Instalar, como Vale Digital) ──
+let promptInstalar = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  promptInstalar = e;
+  document.getElementById('btn-instalar').classList.remove('hidden');
+});
+window.addEventListener('appinstalled', () => {
+  promptInstalar = null;
+  document.getElementById('btn-instalar').classList.add('hidden');
+  registrarActividad_('instalar', '', 'OK');
+  aviso('Anotador instalado');
+});
+document.getElementById('btn-instalar').addEventListener('click', async () => {
+  if (!promptInstalar) return;
+  promptInstalar.prompt();
+  try { await promptInstalar.userChoice; } catch (e) { /* nada */ }
+  promptInstalar = null;
+  document.getElementById('btn-instalar').classList.add('hidden');
+});
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch(err => console.warn('[sw] no registrado:', err.message));
 }

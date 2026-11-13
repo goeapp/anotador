@@ -1,6 +1,6 @@
-// Anotador — sw_v1_0_0.js  (subir como sw.js al repo goeapp/anotador)
+// Anotador — sw_v1_0_1.js  (subir como sw.js al repo goeapp/anotador)
 // Guarda la app en el equipo para que abra sin señal. Los datos van por Supabase (nunca se guardan acá).
-const CACHE = 'anotador-v1.0.0';
+const CACHE = 'anotador-v1.0.1';
 const APP = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 const CDN = [
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js',

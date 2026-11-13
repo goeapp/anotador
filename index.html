@@ -18,6 +18,17 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <!--
+  Anotador v1.1.0 (13-nov-2026) — Etapa 2: Pizarrón (solo compu). Sin SQL nuevo (usa pz_x, pz_y de v1.0.0).
+  · Pestañas Notas | Pizarrón en el encabezado (compu). En el celular no aparecen.
+  · Barra lateral plegable con las ancladas que no están en el corcho. Se arrastran al corcho y quedan
+    donde se sueltan, un poco torcidas. En el corcho se mueven solo desde la franja de arriba.
+    La posición se guarda sola (fracción del corcho, 0 a 1) y se ve igual en la otra compu.
+  · Del corcho a la barra: sigue anclada. Botón despegar de la franja: vuelve a Otras (con Deshacer).
+  · Tocar la nota la abre en pantalla completa.
+  · Luz: late suave solo el fondo de la pastilla (3 s), en todas las vistas.
+  · Anclar en Notas la manda a la barra; despegar en Notas o en la nota abierta la saca del corcho.
+-->
+<!--
   Anotador v1.0.1 (13-nov-2026) — puesta en marcha (requiere an_esquema_v1_0_1.sql y sw_v1_0_1.js):
   · Botón Instalar en el encabezado (como Vale Digital): aparece cuando el navegador lo ofrece.
   · Favicon (el ícono del Anotador en la pestaña del navegador).
@@ -273,6 +284,7 @@ button.luz { cursor: pointer; padding: 0; }
   #app-header.buscando .hdr-buscar { display: flex; }
   #app-header { flex-wrap: wrap; }
   .pill-senal .txt, .txt-instalar { display: none; }
+  .hdr-tabs { display: none; }
   .hdr-ic { width: 44px; height: 44px; background: transparent; border: 0; font-size: 1.25rem; }
   #btn-buscar-cel { display: inline-flex !important; }
   main { padding: 12px 12px 100px; gap: 10px; }
@@ -299,6 +311,73 @@ button.luz { cursor: pointer; padding: 0; }
   .pop { width: calc(100vw - 32px); max-width: 340px; }
 }
 #btn-buscar-cel { display: none; }
+
+/* ── LUZ QUE LATE (v1.1.0): solo el fondo de la pastilla, suave ── */
+@keyframes luz-late { 0%, 100% { background: rgba(250,204,21,.28); } 50% { background: rgba(250,204,21,.85); } }
+.luz.on { animation: luz-late 3s ease-in-out infinite; }
+
+/* ── PESTAÑAS Notas | Pizarrón (solo compu) ── */
+.hdr-tabs { display: flex; gap: 6px; }
+.hdr-tab { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: 1px solid rgba(255,255,255,.18); color: rgba(255,255,255,.7); border-radius: var(--radius-sm); padding: 5px 14px; font-size: .78rem; font-weight: 600; }
+.hdr-tab:hover { border-color: var(--accent); color: var(--accent); }
+.hdr-tab.activa { background: var(--accent); border-color: var(--accent-border); color: #fff; }
+.hdr-tab .cnt { font-size: .68rem; opacity: .85; }
+@media (max-width: 560px) { .hdr-tabs, #pizarron { display: none !important; } }
+
+/* ── PIZARRÓN (v1.1.0) ── */
+body.modo-pz main { max-width: none; padding: 14px 18px 18px; }
+body.modo-pz #barra-nueva, body.modo-pz #filtros, body.modo-pz #lista, body.modo-pz #fab { display: none !important; }
+#pizarron { display: none; gap: 14px; height: calc(100vh - var(--header-h) - 32px); min-height: 480px; }
+body.modo-pz #pizarron { display: flex; }
+.pz-bandeja { flex: none; width: 250px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; overflow: hidden; transition: width .2s ease; }
+.pz-bandeja.cerrada { width: 46px; }
+.pz-band-cab { display: flex; align-items: center; gap: 8px; padding: 10px 10px 8px 12px; border-bottom: 1px solid var(--border); }
+.pz-band-cab .tit { flex: 1; font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted2); white-space: nowrap; }
+.pz-bandeja.cerrada .pz-band-cab { flex-direction: column; padding: 10px 6px; }
+.pz-bandeja.cerrada .pz-band-cab .tit, .pz-bandeja.cerrada .pz-band-lista, .pz-bandeja.cerrada .pz-band-pie { display: none; }
+.pz-band-cnt { font-size: .7rem; font-weight: 700; background: var(--tag-bg); color: var(--tag-fg); border-radius: 99px; padding: 0 7px; }
+.pz-band-lista { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.pz-band-lista.sobre { background: #fffbeb; outline: 2px dashed var(--accent); outline-offset: -6px; }
+.pz-mini { border: 1px solid; border-radius: 4px 4px 4px 12px; padding: 8px 10px; font-size: .78rem; line-height: 1.4; cursor: grab; user-select: none; touch-action: none; box-shadow: 0 1px 2px rgba(15,23,42,.08); position: relative; }
+.pz-mini:hover { box-shadow: 0 4px 12px rgba(15,23,42,.14); }
+.pz-mini .t { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pz-mini .r { color: var(--muted2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.pz-mini .luz { position: absolute; top: 6px; right: 6px; width: 24px; height: 18px; font-size: .72rem; }
+.pz-mini.con-luz .t { padding-right: 26px; }
+.pz-band-vacia { font-size: .78rem; color: var(--muted); padding: 6px 2px; line-height: 1.5; }
+.pz-band-pie { font-size: .7rem; color: var(--muted2); padding: 8px 12px; border-top: 1px solid var(--border); line-height: 1.4; }
+.pz-zona { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.pz-cab { display: flex; align-items: center; gap: 12px; }
+.pz-cab .tit { font-family: 'Bebas Neue', sans-serif; font-size: 1.7rem; color: var(--accent2); letter-spacing: .4px; line-height: 1; }
+.pz-cab .cnt { font-size: .74rem; font-weight: 700; background: #e0f2fe; color: #075985; border-radius: 99px; padding: 3px 10px; }
+.pz-cab .ayuda { font-size: .74rem; color: var(--muted2); margin-left: auto; }
+.corcho { flex: 1; position: relative; overflow: hidden; border-radius: 10px;
+  background-color: #b9895a;
+  background-image: radial-gradient(rgba(90,55,25,.35) 1px, transparent 1.6px), radial-gradient(rgba(255,235,200,.18) 1px, transparent 1.4px);
+  background-size: 7px 7px, 11px 11px; background-position: 0 0, 3px 4px;
+  box-shadow: inset 0 0 0 10px #7c5531, inset 0 0 30px rgba(0,0,0,.35); }
+.corcho.sobre { box-shadow: inset 0 0 0 10px #d97706, inset 0 0 30px rgba(0,0,0,.35); }
+.corcho-vacio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: rgba(255,248,235,.85); font-size: .95rem; text-align: center; padding: 30px; pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,.4); }
+.pz-nota { position: absolute; width: 230px; border-radius: 3px 3px 3px 14px; box-shadow: 0 6px 14px rgba(0,0,0,.30); transition: box-shadow .15s; color: var(--text); }
+.pz-nota.c-amarillo { background: #fef9c3; } .pz-nota.c-verde { background: #dcfce7; } .pz-nota.c-rosa { background: #fce7f3; }
+.pz-nota.c-celeste { background: #e0f2fe; } .pz-nota.c-naranja { background: #ffedd5; } .pz-nota.c-lila { background: #f3e8ff; }
+.pz-franja { height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 4px 0 8px; border-radius: 3px 3px 0 0; color: #475569; cursor: grab; user-select: none; touch-action: none; }
+.pz-nota.c-amarillo .pz-franja { background: #fde68a; } .pz-nota.c-verde .pz-franja { background: #bbf7d0; } .pz-nota.c-rosa .pz-franja { background: #fbcfe8; }
+.pz-nota.c-celeste .pz-franja { background: #bae6fd; } .pz-nota.c-naranja .pz-franja { background: #fed7aa; } .pz-nota.c-lila .pz-franja { background: #e9d5ff; }
+.pz-franja .esp { flex: 1; }
+.pz-franja .luz { width: 26px; height: 18px; font-size: .74rem; }
+.pz-despegar { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 22px; border: 0; background: transparent; color: #475569; border-radius: 6px; padding: 0; font-size: .95rem; }
+.pz-despegar:hover { background: rgba(15,23,42,.10); color: var(--text); }
+.pz-cuerpo { padding: 10px 14px 12px; cursor: pointer; }
+.pz-cuerpo .nota-tit { font-size: .92rem; }
+.pz-cuerpo .nota-txt { -webkit-line-clamp: 8; }
+.pz-nota.levantada { box-shadow: 0 22px 40px rgba(0,0,0,.42); z-index: 50 !important; }
+.pz-nota.levantada .pz-franja, .pz-mini.levantada { cursor: grabbing; }
+.pz-fantasma { position: fixed; z-index: 2000; pointer-events: none; width: 230px; opacity: .95; box-shadow: 0 22px 40px rgba(0,0,0,.42); transform: rotate(-2deg); }
+@keyframes pz-pega { 0% { transform: var(--rot) scale(1.06); } 100% { transform: var(--rot) scale(1); } }
+.pz-nota.pega { animation: pz-pega .25s ease-out; }
+@keyframes pz-sale { to { opacity: 0; transform: var(--rot) translateY(-14px) scale(.92); } }
+.pz-nota.sale { animation: pz-sale .22s ease-in forwards; }
 </style>
 </head>
 <body>
@@ -347,6 +426,10 @@ button.luz { cursor: pointer; padding: 0; }
     <button class="hdr-back" id="btn-atras" aria-label="Atrás" title="Atrás"><i class="ti ti-arrow-left"></i></button>
     <div class="hdr-logo"><i class="ti ti-notes"></i><span>Anotador</span></div>
     <div class="hdr-version" id="version-label-app"></div>
+    <div class="hdr-tabs" id="hdr-tabs">
+      <button class="hdr-tab" data-vista="notas"><i class="ti ti-layout-grid"></i> Notas</button>
+      <button class="hdr-tab" data-vista="pizarron"><i class="ti ti-layout-board"></i> Pizarrón <span class="cnt" id="cnt-tab-pz"></span></button>
+    </div>
     <label class="hdr-buscar" id="hdr-buscar">
       <i class="ti ti-search"></i>
       <input type="search" id="input-buscar" placeholder="Buscar en las notas" aria-label="Buscar en las notas" autocomplete="off">
@@ -382,6 +465,17 @@ button.luz { cursor: pointer; padding: 0; }
 
     <div class="filtros" id="filtros"></div>
     <div id="lista"></div>
+    <section id="pizarron" aria-label="Pizarrón">
+      <aside class="pz-bandeja" id="pz-bandeja">
+        <div class="pz-band-cab"><button class="ic" id="pz-toggle"></button><span class="tit">Para poner</span><span class="pz-band-cnt" id="pz-band-cnt"></span></div>
+        <div class="pz-band-lista" id="pz-band-lista"></div>
+        <div class="pz-band-pie">Arrastrá una nota al corcho. Para sacarla, traela de vuelta acá.</div>
+      </aside>
+      <div class="pz-zona">
+        <div class="pz-cab"><span class="tit">Las de la semana</span><span class="cnt" id="pz-cnt"></span><span class="ayuda"><i class="ti ti-grip-horizontal"></i> Se mueven desde la franja de arriba</span></div>
+        <div class="corcho" id="corcho"></div>
+      </div>
+    </section>
   </main>
 
   <button id="fab" aria-label="Nota nueva" title="Nota nueva"><i class="ti ti-plus"></i></button>
@@ -429,9 +523,9 @@ button.luz { cursor: pointer; padding: 0; }
 
 <script>
 // ============================================================
-// Anotador — index_anotador_v1_0_1.html  (subir como index.html al repo goeapp/anotador)
+// Anotador — index_anotador_v1_1_0.html  (subir como index.html al repo goeapp/anotador)
 // ============================================================
-const APP_VERSION   = 'v1.0.1';
+const APP_VERSION   = 'v1.1.0';
 const SUPABASE_URL  = 'https://uhuftsxrzwhmvzygcuvp.supabase.co';
 const SUPABASE_KEY  = 'sb_publishable_TCibRAnzgaDIbn_MIirw6w_FltKG8X3';
 const REDIRECT_MAIL = 'https://goeapp.github.io/anotador/';
@@ -734,7 +828,8 @@ function guardarNota_(n, cambios) {
 function filaBase_(n) {
   return { id: n.id, texto: n.texto, color: n.color, anclada: !!n.anclada, luz: !!n.luz,
     etiquetas: n.etiquetas || [], etiquetas_auto: n.etiquetas_auto || [], pwa: n.pwa || null, obra: n.obra || null,
-    vale: n.vale || null, origen_url: n.origen_url || null, creada: n.creada, borrada_at: n.borrada_at || null };
+    vale: n.vale || null, origen_url: n.origen_url || null, creada: n.creada, borrada_at: n.borrada_at || null,
+    pz_x: n.pz_x == null ? null : n.pz_x, pz_y: n.pz_y == null ? null : n.pz_y };
 }
 function programarSubida_() { clearTimeout(subirTimer); subirTimer = setTimeout(subir_, 700); }
 async function subir_() {
@@ -774,7 +869,8 @@ async function bajar_() {
 function desdeFila_(r) {
   return { id: r.id, texto: r.texto || '', color: COLORES.includes(r.color) ? r.color : 'amarillo', anclada: !!r.anclada, luz: !!r.luz,
     etiquetas: r.etiquetas || [], etiquetas_auto: r.etiquetas_auto || [], pwa: r.pwa, obra: r.obra, vale: r.vale, origen_url: r.origen_url,
-    creada: r.creada, actualizada: r.actualizada, borrada_at: r.borrada_at };
+    creada: r.creada, actualizada: r.actualizada, borrada_at: r.borrada_at,
+    pz_x: r.pz_x == null ? null : +r.pz_x, pz_y: r.pz_y == null ? null : +r.pz_y };
 }
 function conectarRT_() {
   if (!sb || canalRT || !uidActual) return;
@@ -783,7 +879,7 @@ function conectarRT_() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'an_notas', filter: 'user_id=eq.' + uidActual }, p => {
         if (p.eventType === 'DELETE') { const id = p.old && p.old.id; if (id && !cola[id]) { delete notas[id]; guardarEquipo_(); pintar_(); } return; }
         const r = p.new; if (!r || cola[r.id]) return;
-        if (r.id === abiertaId || r.id === barraId) return;      // no pisar lo que se está escribiendo
+        if (r.id === abiertaId || r.id === barraId || (arrastre && arrastre.id === r.id)) return;      // no pisar lo que se está escribiendo
         notas[r.id] = desdeFila_(r); guardarEquipo_(); pintar_();
       })
       .subscribe();
@@ -905,7 +1001,7 @@ function htmlGrilla_(id, lista) {
   return '<div class="grilla" id="' + id + '" data-cols="' + n + '">' + cols.map(c => '<div class="grilla-col">' + c.join('') + '</div>').join('') + '</div>';
 }
 let colsActual = columnas_(), resizeTimer = null;
-window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (columnas_() !== colsActual) { colsActual = columnas_(); if (uidActual) pintar_(); } }, 150); });
+window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (!uidActual) return; if (vistaEfectiva_() === 'pizarron') { pintar_(); return; } if (columnas_() !== colsActual) { colsActual = columnas_(); pintar_(); } }, 150); });
 function pintarFiltros_() {
   const lista = conteoEtiquetas_();
   const visibles = lista.slice(0, TOP_ETQ);
@@ -919,6 +1015,8 @@ function pintarFiltros_() {
   el.classList.toggle('hidden', !lista.length && !filtrosEtq.length);
 }
 function pintar_() {
+  pintarTabs_();
+  if (vistaEfectiva_() === 'pizarron') { pintarPizarron_(); pintarCntPapelera_(); return; }
   pintarFiltros_();
   const lista = filtradas_();
   const anc = lista.filter(n => n.anclada), otras = lista.filter(n => !n.anclada);
@@ -934,6 +1032,9 @@ function pintar_() {
     el.innerHTML = html;
   }
   nuevosIds.clear(); destelloId = null;
+  pintarCntPapelera_();
+}
+function pintarCntPapelera_() {
   const enPap = Object.values(notas).filter(n => n.borrada_at).length;
   const c = document.getElementById('cnt-papelera');
   c.textContent = enPap; c.classList.toggle('hidden', !enPap);
@@ -1012,7 +1113,7 @@ document.getElementById('lista').addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('nota')) abrirNota_(e.target.dataset.id);
 });
 function anclar_(n) {
-  guardarNota_(n, { anclada: !n.anclada });
+  guardarNota_(n, { anclada: !n.anclada, pz_x: null, pz_y: null });   // anclar → a la barra del pizarrón; despegar → sale del corcho
   destelloId = n.id;
   registrarActividad_(n.anclada ? 'anclar' : 'despegar', n.id, 'OK');
   pintar_();
@@ -1036,7 +1137,7 @@ function aPapelera_(n) {
 // Buscar
 const inpBuscar = document.getElementById('input-buscar');
 let buscarTimer = null;
-inpBuscar.addEventListener('input', () => { clearTimeout(buscarTimer); buscarTimer = setTimeout(() => { textoBuscar = inpBuscar.value.trim(); pintar_(); }, 150); });
+inpBuscar.addEventListener('input', () => { if (vistaEfectiva_() === 'pizarron') cambiarVista_('notas'); clearTimeout(buscarTimer); buscarTimer = setTimeout(() => { textoBuscar = inpBuscar.value.trim(); pintar_(); }, 150); });
 inpBuscar.addEventListener('keydown', e => { if (e.key === 'Escape') { inpBuscar.value = ''; textoBuscar = ''; pintar_(); inpBuscar.blur(); } });
 document.getElementById('btn-buscar-cel').addEventListener('click', () => {
   const h = document.getElementById('app-header'); h.classList.toggle('buscando');
@@ -1195,7 +1296,7 @@ window.addEventListener('popstate', () => { if (abiertaId) cerrarFull_(true); })
 document.getElementById('nf-volver').addEventListener('click', () => cerrarFull_(false));
 document.getElementById('nf-colores').addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (b) cambiarFull_({ color: b.dataset.c }); });
 document.getElementById('nf-luz').addEventListener('click', () => { const n = notas[abiertaId]; if (n) cambiarFull_({ luz: !n.luz }); });
-document.getElementById('nf-anclar').addEventListener('click', () => { const n = notas[abiertaId]; if (n) { cambiarFull_({ anclada: !n.anclada }); destelloId = n.id; aviso(n.anclada ? 'Anclada: queda arriba' : 'Despegada'); } });
+document.getElementById('nf-anclar').addEventListener('click', () => { const n = notas[abiertaId]; if (n) { cambiarFull_({ anclada: !n.anclada, pz_x: null, pz_y: null }); destelloId = n.id; aviso(n.anclada ? 'Anclada: queda arriba' : 'Despegada'); } });
 document.getElementById('nf-copiar').addEventListener('click', () => copiar_(fullTxt.value));
 document.getElementById('nf-papelera').addEventListener('click', () => {
   const n = notas[abiertaId]; if (!n) return;
@@ -1306,12 +1407,179 @@ document.addEventListener('keydown', e => {
   }
   if (e.ctrlKey && e.altKey && (e.key === 'u' || e.key === 'U')) { e.preventDefault(); abrirSesion_(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey || escribiendo_(document.activeElement) || abiertaId) return;
-  if (e.key === 'c' || e.key === 'C') { e.preventDefault(); if (esCelular_()) abrirNueva_(); else abrirBarra_(); }
+  if (e.key === 'c' || e.key === 'C') { e.preventDefault(); if (esCelular_() || vistaEfectiva_() === 'pizarron') abrirNueva_(); else abrirBarra_(); }
   else if (e.key === '/') { e.preventDefault(); if (esCelular_()) document.getElementById('app-header').classList.add('buscando'); inpBuscar.focus(); }
 });
 document.getElementById('fab').addEventListener('click', abrirNueva_);
 window.addEventListener('pagehide', () => { if (abiertaId) guardarFull_(); if (barraId) guardarBarra_(); });
 MQ_CEL.addEventListener && MQ_CEL.addEventListener('change', () => { if (uidActual) pintar_(); });
+
+// ══════════════════════════════════════════════════════════════
+// PIZARRÓN (v1.1.0) — solo compu
+//  · Barra lateral: ancladas que no están en el corcho (pz_x vacío). Se pliega.
+//  · Arrastrar de la barra al corcho: queda donde la soltás. Posición en fracción del corcho
+//    (pz_x, pz_y de 0 a 1): se ve igual en otra pantalla.
+//  · En el corcho se mueve solo desde la franja de arriba. Del corcho a la barra: sigue anclada.
+//  · Despegar (botón de la franja): deja de estar anclada y vuelve a Otras (con Deshacer).
+// ══════════════════════════════════════════════════════════════
+const VISTA_KEY = 'an_vista', BANDEJA_KEY = 'an_bandeja_cerrada';
+let vista = leerPref(VISTA_KEY) === 'pizarron' ? 'pizarron' : 'notas';
+let bandejaCerrada = leerPref(BANDEJA_KEY) === '1';
+let arrastre = null;           // { id, desde: 'bandeja'|'corcho', el, dx, dy, x0, y0, movio }
+let pegadaId = null;
+const PZ_ANCHO = 230;
+function enCorcho_(n) { return n.anclada && n.pz_x != null && n.pz_y != null; }
+function rotacion_(id) { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) | 0; return ((Math.abs(h) % 61) - 30) / 10; }   // -3° a 3°, fija por nota
+function vistaEfectiva_() { return esCelular_() ? 'notas' : vista; }
+function cambiarVista_(v) {
+  vista = v; guardarPref(VISTA_KEY, v);
+  if (abiertaId) cerrarFull_(false);
+  cerrarBarra_();
+  pintar_();
+}
+function pintarTabs_() {
+  const v = vistaEfectiva_();
+  document.body.classList.toggle('modo-pz', v === 'pizarron');
+  document.querySelectorAll('.hdr-tab').forEach(b => { b.classList.toggle('activa', b.dataset.vista === v); b.setAttribute('aria-pressed', b.dataset.vista === v); });
+  const n = activas_().filter(x => x.anclada).length;
+  document.getElementById('cnt-tab-pz').textContent = n ? n : '';
+}
+document.querySelectorAll('.hdr-tab').forEach(b => b.addEventListener('click', () => cambiarVista_(b.dataset.vista)));
+
+function htmlMini_(n) {
+  const p = primeraLinea_(n.texto);
+  const tit = p.tit || p.resto.split('\n')[0];
+  const resto = p.tit ? p.resto : p.resto.split('\n').slice(1).join(' ');
+  return '<div class="pz-mini c-' + n.color + (n.luz ? ' con-luz' : '') + '" data-mini="' + n.id + '" title="Arrastrala al corcho (o tocala para abrirla)">' +
+    (n.luz ? '<span class="luz on"><i class="ti ti-bulb"></i></span>' : '') +
+    '<div class="t">' + escaparHtml(tit) + '</div>' + (resto.trim() ? '<div class="r">' + escaparHtml(resto) + '</div>' : '') + '</div>';
+}
+function htmlPzNota_(n) {
+  const p = primeraLinea_(n.texto);
+  const rot = rotacion_(n.id);
+  const etqs = (n.etiquetas_auto || []).map(e => htmlEtq_(e, true)).join('') + (n.etiquetas || []).filter(e => !(n.etiquetas_auto || []).includes(e)).map(e => htmlEtq_(e, false)).join('');
+  return '<div class="pz-nota c-' + n.color + (pegadaId === n.id ? ' pega' : '') + '" data-pz="' + n.id + '" style="--rot: rotate(' + rot + 'deg); transform: rotate(' + rot + 'deg)">' +
+    '<div class="pz-franja" title="Arrastrar desde acá"><i class="ti ti-grip-horizontal"></i><span class="esp"></span>' +
+      (n.luz ? '<span class="luz on" title="Luz prendida"><i class="ti ti-bulb"></i></span>' : '') +
+      '<button class="pz-despegar" data-despegar="' + n.id + '" aria-label="Despegar" title="Despegar (vuelve a Otras)"><i class="ti ti-pinned-off"></i></button></div>' +
+    '<div class="pz-cuerpo" data-abrir="' + n.id + '" role="button" tabindex="0" aria-label="Abrir nota">' +
+      (p.tit ? '<div class="nota-tit">' + escaparHtml(p.tit) + '</div>' : '') +
+      (p.resto ? '<div class="nota-txt">' + escaparHtml(p.resto) + '</div>' : '') +
+      (etqs ? '<div class="nota-etqs">' + etqs + '</div>' : '') +
+      '<div class="nota-pie">' + fechaCorta(n.creada) + (n.vale ? ' · ' + escaparHtml(n.vale) : '') + '</div>' +
+    '</div></div>';
+}
+function pintarPizarron_() {
+  const anc = activas_().filter(n => n.anclada);
+  const bandeja = anc.filter(n => !enCorcho_(n)).sort((a, b) => Date.parse(b.creada) - Date.parse(a.creada));
+  const puestas = anc.filter(enCorcho_).sort((a, b) => Date.parse(a.actualizada || a.creada) - Date.parse(b.actualizada || b.creada));
+  const band = document.getElementById('pz-bandeja');
+  band.classList.toggle('cerrada', bandejaCerrada);
+  const tg = document.getElementById('pz-toggle');
+  tg.innerHTML = '<i class="ti ' + (bandejaCerrada ? 'ti-layout-sidebar-left-expand' : 'ti-layout-sidebar-left-collapse') + '"></i>';
+  tg.title = bandejaCerrada ? 'Abrir la barra' : 'Cerrar la barra'; tg.setAttribute('aria-label', tg.title);
+  const cnt = document.getElementById('pz-band-cnt');
+  cnt.textContent = bandeja.length; cnt.classList.toggle('hidden', !bandeja.length);
+  document.getElementById('pz-band-lista').innerHTML = bandeja.length ? bandeja.map(htmlMini_).join('')
+    : '<div class="pz-band-vacia">' + (anc.length ? 'Todas las ancladas ya están en el corcho.' : 'Todavía no hay notas ancladas. Anclá una en Notas (<i class="ti ti-pin"></i>) y aparece acá.') + '</div>';
+  const corcho = document.getElementById('corcho');
+  const W = corcho.clientWidth, H = corcho.clientHeight;
+  corcho.innerHTML = (puestas.length ? '' : '<div class="corcho-vacio">' + (bandeja.length ? 'Arrastrá una nota de la barra y soltala acá.' : 'El corcho está vacío.') + '</div>') + puestas.map(htmlPzNota_).join('');
+  corcho.querySelectorAll('.pz-nota').forEach((el, i) => {
+    const n = notas[el.dataset.pz];
+    const x = Math.max(0, Math.min(1, +n.pz_x)) * Math.max(0, W - PZ_ANCHO);
+    const y = Math.max(0, Math.min(1, +n.pz_y)) * Math.max(0, H - 60);
+    el.style.left = x + 'px'; el.style.top = y + 'px'; el.style.zIndex = 10 + i;
+  });
+  document.getElementById('pz-cnt').textContent = puestas.length + (puestas.length === 1 ? ' en el corcho' : ' en el corcho') + (bandeja.length ? ' · ' + bandeja.length + ' en la barra' : '');
+  pegadaId = null;
+}
+document.getElementById('pz-toggle').addEventListener('click', () => { bandejaCerrada = !bandejaCerrada; guardarPref(BANDEJA_KEY, bandejaCerrada ? '1' : '0'); pintarPizarron_(); });
+
+// ── Arrastrar (mouse / lápiz) ──
+function puntoEn_(el, x, y) { const r = el.getBoundingClientRect(); return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom; }
+function sobreBandeja_(x, y) { return !bandejaCerrada && puntoEn_(document.getElementById('pz-band-lista'), x, y) || puntoEn_(document.getElementById('pz-bandeja'), x, y); }
+document.getElementById('pizarron').addEventListener('pointerdown', e => {
+  if (e.button !== 0) return;
+  if (e.target.closest('[data-despegar]')) return;
+  const mini = e.target.closest('[data-mini]'), franja = e.target.closest('.pz-franja');
+  if (!mini && !franja) return;
+  const el = mini || franja.closest('.pz-nota');
+  const r = el.getBoundingClientRect();
+  arrastre = { id: mini ? mini.dataset.mini : el.dataset.pz, desde: mini ? 'bandeja' : 'corcho', el, dx: e.clientX - r.left, dy: e.clientY - r.top, x0: e.clientX, y0: e.clientY, movio: false, fantasma: null };
+  try { el.setPointerCapture(e.pointerId); } catch (err) { /* nada */ }
+  e.preventDefault();
+});
+document.addEventListener('pointermove', e => {
+  if (!arrastre) return;
+  const a = arrastre;
+  if (!a.movio && Math.hypot(e.clientX - a.x0, e.clientY - a.y0) < 5) return;
+  if (!a.movio) {
+    a.movio = true;
+    if (a.desde === 'bandeja') {
+      const n = notas[a.id];
+      const f = document.createElement('div');
+      f.className = 'pz-nota pz-fantasma c-' + n.color;
+      f.innerHTML = htmlPzNota_(n).replace(/^<div[^>]*>/, '').replace(/<\/div>$/, '');
+      document.body.appendChild(f);
+      a.fantasma = f; a.dx = 40; a.dy = 14;
+      a.el.style.opacity = '.35';
+    } else a.el.classList.add('levantada');
+  }
+  const corcho = document.getElementById('corcho'), cr = corcho.getBoundingClientRect();
+  if (a.fantasma) { a.fantasma.style.left = (e.clientX - a.dx) + 'px'; a.fantasma.style.top = (e.clientY - a.dy) + 'px'; }
+  else { a.el.style.left = (e.clientX - cr.left - a.dx) + 'px'; a.el.style.top = (e.clientY - cr.top - a.dy) + 'px'; }
+  corcho.classList.toggle('sobre', a.desde === 'bandeja' && puntoEn_(corcho, e.clientX, e.clientY));
+  document.getElementById('pz-band-lista').classList.toggle('sobre', a.desde === 'corcho' && sobreBandeja_(e.clientX, e.clientY));
+});
+document.addEventListener('pointerup', e => {
+  if (!arrastre) return;
+  const a = arrastre; arrastre = null;
+  const corcho = document.getElementById('corcho');
+  corcho.classList.remove('sobre'); document.getElementById('pz-band-lista').classList.remove('sobre');
+  if (a.fantasma) a.fantasma.remove();
+  const n = notas[a.id];
+  if (!n) { pintarPizarron_(); return; }
+  if (!a.movio) { pintarPizarron_(); abrirNota_(n.id); return; }      // fue un toque: abrir la nota
+  if (a.desde === 'corcho' && sobreBandeja_(e.clientX, e.clientY)) {
+    guardarNota_(n, { pz_x: null, pz_y: null });
+    registrarActividad_('pz_a_barra', n.id, 'OK');
+    pintar_(); aviso('Volvió a la barra (sigue anclada)'); return;
+  }
+  if (puntoEn_(corcho, e.clientX, e.clientY) || a.desde === 'corcho') {
+    const cr = corcho.getBoundingClientRect();
+    const W = Math.max(1, cr.width - PZ_ANCHO), H = Math.max(1, cr.height - 60);
+    const fx = Math.max(0, Math.min(1, (e.clientX - cr.left - a.dx) / W));
+    const fy = Math.max(0, Math.min(1, (e.clientY - cr.top - a.dy) / H));
+    guardarNota_(n, { pz_x: Math.round(fx * 10000) / 10000, pz_y: Math.round(fy * 10000) / 10000 });
+    if (a.desde === 'bandeja') { pegadaId = n.id; registrarActividad_('pz_poner', n.id, 'OK'); }
+    pintar_(); return;
+  }
+  pintarPizarron_();                                                  // soltada afuera: no cambia nada
+});
+document.addEventListener('pointercancel', () => { if (arrastre) { if (arrastre.fantasma) arrastre.fantasma.remove(); arrastre = null; pintarPizarron_(); } });
+document.getElementById('pizarron').addEventListener('click', e => {
+  const d = e.target.closest('[data-despegar]');
+  if (d) { despegarPz_(d.dataset.despegar); return; }
+  const c = e.target.closest('[data-abrir]');
+  if (c) abrirNota_(c.dataset.abrir);
+});
+document.getElementById('pizarron').addEventListener('keydown', e => {
+  const c = e.target.closest && e.target.closest('[data-abrir]');
+  if (c && e.key === 'Enter') abrirNota_(c.dataset.abrir);
+});
+function despegarPz_(id) {
+  const n = notas[id]; if (!n) return;
+  const antes = { anclada: n.anclada, pz_x: n.pz_x, pz_y: n.pz_y };
+  const el = document.querySelector('.pz-nota[data-pz="' + id + '"]');
+  if (el) el.classList.add('sale');
+  setTimeout(() => {
+    guardarNota_(n, { anclada: false, pz_x: null, pz_y: null });
+    registrarActividad_('despegar', n.id, 'OK', { desde: 'pizarron' });
+    pintar_();
+    aviso('Despegada: quedó en Otras', 'DESHACER', () => { guardarNota_(n, antes); pegadaId = n.id; pintar_(); });
+  }, el ? 200 : 0);
+}
 
 // ── INSTALABLE (botón Instalar, como Vale Digital) ──
 let promptInstalar = null;

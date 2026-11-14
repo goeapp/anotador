@@ -1,5 +1,9 @@
 /* ============================================================
-   anotador.js — v1.0.2 (13-nov-2026) · subir como anotador.js al repo goeapp/anotador
+   anotador.js — v1.0.3 (14-nov-2026) · subir como anotador.js al repo goeapp/anotador
+   v1.0.3 — Celular también apaisado: se reconoce por el lado corto de la pantalla en equipos táctiles
+            (la tablet sigue como compu). Libreta: al tocar "Anotá algo…" sube una hoja cuadriculada
+            encima de la lista (la lista queda atrás, oscurecida). "Listo" la baja y la nota cae arriba;
+            tocar afuera o "atrás" la cierra sin perder lo escrito (queda como borrador en el equipo).
    v1.0.2 — Botón solo con el ícono (ocupa menos lugar); el nombre queda en el aviso al pasar el mouse.
    v1.0.1 — Libreta en tiempo real: mientras está abierta, lo que se crea, borra o edita en otro equipo
             aparece o desaparece solo. Al volver a la app (desbloquear el celular) se actualiza sola.
@@ -13,7 +17,7 @@
    · Compu: el botón abre el Anotador completo (v1.2.0+) en una ventana sobre la PWA.
      La PWA le presta su sesión de Supabase: le pasa el token y es la ÚNICA que lo renueva
      (si renovaran las dos, la base puede cerrar la sesión por seguridad).
-   · Celular (≤ 560 px): abre la LIBRETA dentro de la PWA: lista de notas (más nuevas primero)
+   · Celular (lado corto ≤ 560 px): abre la LIBRETA dentro de la PWA: lista de notas (más nuevas primero)
      y un campo para anotar. Nota simple: amarilla, queda anclada sola, sin etiquetas
      (las automáticas, PWA y obra, se guardan igual). Sin señal: se guarda en el equipo y
      se sube sola.
@@ -22,10 +26,11 @@
 (function () {
   'use strict';
   if (window.Anotador) return;
-  const VERSION = 'v1.0.2';
+  const VERSION = 'v1.0.3';
   const BASE = 'https://goeapp.github.io/anotador/';
   const ORIGEN = new URL(BASE).origin;
-  const CEL = window.matchMedia ? window.matchMedia('(max-width: 560px)') : { matches: false };
+  const CEL_MQ = '(max-width: 560px), (pointer: coarse) and (max-height: 560px)';   // v1.0.3: igual que el Anotador v1.2.1
+  const CEL = window.matchMedia ? window.matchMedia(CEL_MQ) : { matches: false };
   const TZ = 'America/Argentina/Buenos_Aires';
   let op = null, sb = null, iframe = null, overlay = null, listo = false, abierto = false, libreta = null;
 
@@ -74,11 +79,24 @@
 .an-lib-cab button { width:44px; height:44px; border:0; background:transparent; color:#fff; display:inline-flex; align-items:center; justify-content:center; }
 .an-lib-tit { font-family:'Bebas Neue', sans-serif; font-size:1.55rem; letter-spacing:.4px; color:#d97706; flex:1; display:flex; align-items:center; gap:6px; }
 .an-lib-senal { font-size:.72rem; font-weight:700; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:99px; padding:2px 9px; }
-.an-lib-nueva { padding:12px; display:flex; flex-direction:column; gap:8px; border-bottom:1px solid #e2e8f0; background:#fff; }
-.an-lib-nueva textarea { width:100%; min-height:76px; resize:none; border:1px solid #eab308; background:#fef9c3; border-radius:6px 6px 6px 16px; padding:10px 12px; font:inherit; font-size:1rem; line-height:1.5; color:#1e293b; outline:none; box-sizing:border-box; }
-.an-lib-nueva textarea:focus { box-shadow:0 0 0 2px rgba(217,119,6,.35); }
-.an-lib-fila { display:flex; align-items:center; gap:10px; }
+.an-lib-cab { position:relative; z-index:3; }
+.an-lib-nueva { padding:12px; display:flex; flex-direction:column; gap:6px; border-bottom:1px solid #e2e8f0; background:#fff; }
+.an-cuad { background-color:#fef9c3; background-image:linear-gradient(rgba(146,64,14,.09) 1px, transparent 1px), linear-gradient(90deg, rgba(146,64,14,.09) 1px, transparent 1px); background-size:22px 22px; background-position:-1px -1px; }
+.an-lib-tocar { width:100%; min-height:66px; border:1px solid #eab308; border-radius:6px 6px 6px 16px; padding:10px 12px; font:inherit; font-size:1rem; line-height:22px; color:#94a3b8; text-align:left; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; white-space:pre-wrap; overflow-wrap:anywhere; }
+.an-lib-tocar.an-con-borrador { color:#1e293b; }
+.an-lib-fila { display:flex; align-items:center; gap:10px; min-height:18px; }
 .an-lib-fila .an-lib-msg { flex:1; font-size:.78rem; color:#475569; }
+.an-velo { position:absolute; inset:0; z-index:2; background:rgba(15,23,42,.42); opacity:0; pointer-events:none; transition:opacity .22s ease; }
+.an-velo.an-vis { opacity:1; pointer-events:auto; }
+.an-hoja { position:absolute; left:10px; right:10px; top:calc(124px + env(safe-area-inset-top)); bottom:12px; z-index:4; display:none; flex-direction:column; border:1px solid #eab308; border-radius:8px 8px 8px 22px; box-shadow:0 26px 60px rgba(15,23,42,.42), 0 4px 12px rgba(15,23,42,.18); overflow:hidden; }
+.an-hoja.an-vis { display:flex; animation:an-hoja-sube .26s cubic-bezier(.2,.9,.3,1.15); }
+.an-hoja.an-baja { animation:an-hoja-baja .2s ease-in forwards; }
+@media (max-height: 500px) { .an-hoja { top:calc(84px + env(safe-area-inset-top)); } }   /* apaisado: más hoja, franja oscura más chica */
+@keyframes an-hoja-sube { from { transform:translateY(60%) rotate(-1.5deg) scale(.96); opacity:.2; } to { transform:none; opacity:1; } }
+@keyframes an-hoja-baja { to { transform:translateY(40%) scale(.94); opacity:0; } }
+.an-hoja textarea { flex:1; width:100%; border:0; outline:0; resize:none; background:transparent; font:inherit; font-size:1.05rem; line-height:22px; padding:11px 14px; color:#1e293b; background-attachment:local; }
+.an-hoja-pie { display:flex; align-items:center; gap:10px; padding:8px 10px 10px 14px; background:rgba(254,249,195,.94); border-top:1px solid rgba(234,179,8,.5); }
+.an-hoja-pie .an-hoja-ayuda { flex:1; font-size:.74rem; color:#92400e; }
 .an-lib-listo { border:1px solid #92400e; background:#d97706; color:#fff; border-radius:8px; padding:0 22px; height:44px; font:inherit; font-weight:700; font-size:.9rem; }
 .an-lib-listo:disabled { opacity:.45; }
 .an-lib-lista { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px; padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
@@ -91,7 +109,7 @@
 .an-lib-pie .an-pend { color:#b45309; display:inline-flex; }
 .an-lib-vacio, .an-lib-nota-pie { font-size:.82rem; color:#64748b; text-align:center; padding:18px 10px; }
 .an-entra { animation:an-sube .25s ease-out; }
-@media (prefers-reduced-motion: reduce) { .an-ov.an-vis, .an-lib.an-vis, .an-entra { animation:none; } }`;
+@media (prefers-reduced-motion: reduce) { .an-ov.an-vis, .an-lib.an-vis, .an-entra, .an-hoja.an-vis, .an-hoja.an-baja { animation:none; } .an-velo { transition:none; } }`;
     const st = document.createElement('style'); st.id = 'an-estilos'; st.textContent = css; document.head.appendChild(st);
   }
 
@@ -145,8 +163,8 @@
   }
 
   // ══════════ CELULAR: libreta simple ══════════
-  let uid = null, notasLib = [], colaLib = [], canalLib = null;
-  const kNotas = () => 'an_libreta_' + uid, kCola = () => 'an_libreta_cola_' + uid;
+  let uid = null, notasLib = [], colaLib = [], canalLib = null, hojaAbierta = false, borradorTimer = null;
+  const kNotas = () => 'an_libreta_' + uid, kCola = () => 'an_libreta_cola_' + uid, kBorrador = () => 'an_libreta_borrador_' + uid;
   function crearLibreta() {
     if (libreta) return;
     libreta = document.createElement('div'); libreta.className = 'an-lib'; libreta.id = 'an-libreta';
@@ -154,15 +172,67 @@
     libreta.innerHTML =
       '<div class="an-lib-cab"><button type="button" class="an-lib-atras" aria-label="Volver">' + ATRAS + '</button>' +
       '<span class="an-lib-tit">' + ICONO + ' ANOTADOR</span><span class="an-lib-senal" hidden>Sin señal</span></div>' +
-      '<div class="an-lib-nueva"><textarea class="an-lib-in" placeholder="Anotá algo…" aria-label="Nota nueva"></textarea>' +
-      '<div class="an-lib-fila"><span class="an-lib-msg"></span><button type="button" class="an-lib-listo" disabled>Listo</button></div></div>' +
-      '<div class="an-lib-lista" aria-live="polite"></div>';
+      '<div class="an-lib-nueva"><button type="button" class="an-lib-tocar an-cuad" aria-label="Nota nueva">Anotá algo…</button>' +
+      '<div class="an-lib-fila"><span class="an-lib-msg"></span></div></div>' +
+      '<div class="an-lib-lista" aria-live="polite"></div>' +
+      '<div class="an-velo"></div>' +
+      '<div class="an-hoja an-cuad" role="dialog" aria-label="Nota nueva"><textarea class="an-lib-in" placeholder="Anotá algo…" aria-label="Texto de la nota"></textarea>' +
+      '<div class="an-hoja-pie"><span class="an-hoja-ayuda">Tocá la parte oscura para seguir después</span><button type="button" class="an-lib-listo" disabled>Listo</button></div></div>';
     document.body.appendChild(libreta);
     const ta = libreta.querySelector('.an-lib-in'), bt = libreta.querySelector('.an-lib-listo');
-    ta.addEventListener('input', () => { bt.disabled = !ta.value.trim(); });
+    ta.addEventListener('input', () => {
+      bt.disabled = !ta.value.trim();
+      clearTimeout(borradorTimer); borradorTimer = setTimeout(guardarBorrador, 300);
+    });
     bt.addEventListener('click', anotar);
+    libreta.querySelector('.an-lib-tocar').addEventListener('click', abrirHoja);
+    libreta.querySelector('.an-velo').addEventListener('click', () => cerrarHoja(false));
     libreta.querySelector('.an-lib-atras').addEventListener('click', () => history.back());
     libreta.querySelector('.an-lib-lista').addEventListener('click', e => { const n = e.target.closest('.an-lib-nota'); if (n) n.classList.toggle('an-abierta'); });
+    if (window.visualViewport) visualViewport.addEventListener('resize', ajustarHoja);
+  }
+  // ── hoja cuadriculada (v1.0.3): sube encima de la lista para escribir con espacio ──
+  function guardarBorrador() {
+    clearTimeout(borradorTimer);
+    if (!libreta || !uid) return;
+    const t = libreta.querySelector('.an-lib-in').value;
+    try { if (t.trim()) localStorage.setItem(kBorrador(), t); else localStorage.removeItem(kBorrador()); } catch (e) { /* sin storage */ }
+    pintarTocar();
+  }
+  function pintarTocar() {
+    if (!libreta) return;
+    const t = libreta.querySelector('.an-lib-in').value, b = libreta.querySelector('.an-lib-tocar');
+    b.textContent = t.trim() ? t : 'Anotá algo…';
+    b.classList.toggle('an-con-borrador', !!t.trim());
+  }
+  function ajustarHoja() {   // con el teclado abierto, la hoja termina arriba del teclado
+    if (!hojaAbierta || !libreta || !window.visualViewport) return;
+    const tapa = Math.max(0, window.innerHeight - visualViewport.height - visualViewport.offsetTop);
+    libreta.querySelector('.an-hoja').style.bottom = (12 + tapa) + 'px';
+  }
+  function abrirHoja() {
+    if (hojaAbierta) return;
+    hojaAbierta = true;
+    const hoja = libreta.querySelector('.an-hoja'), ta = libreta.querySelector('.an-lib-in');
+    hoja.classList.remove('an-baja'); hoja.classList.add('an-vis');
+    libreta.querySelector('.an-velo').classList.add('an-vis');
+    ta.focus();                                      // en el mismo toque, para que el celular abra el teclado
+    try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) { /* nada */ }
+    try { history.pushState({ anotador: 1, hoja: 1 }, ''); } catch (e) { /* nada */ }
+    ajustarHoja();
+  }
+  /** Cierra la hoja. Lo escrito queda como borrador (salvo que se haya anotado). */
+  function cerrarHoja(porAtras, alTerminar) {
+    if (!hojaAbierta) return;
+    hojaAbierta = false;
+    guardarBorrador();
+    const hoja = libreta.querySelector('.an-hoja'), ta = libreta.querySelector('.an-lib-in');
+    try { ta.blur(); } catch (e) { /* nada */ }
+    libreta.querySelector('.an-velo').classList.remove('an-vis');
+    hoja.classList.add('an-baja');
+    const fin = () => { hoja.classList.remove('an-vis', 'an-baja'); hoja.style.bottom = ''; if (alTerminar) alTerminar(); };
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) fin(); else setTimeout(fin, 200);
+    if (!porAtras && history.state && history.state.hoja) { try { history.back(); } catch (e) { /* nada */ } }
   }
   function pintarLibreta(nuevoId) {
     if (!libreta) return;
@@ -217,8 +287,9 @@
     const msg = libreta.querySelector('.an-lib-msg');
     msg.textContent = navigator.onLine ? 'Anotada' : 'Anotada en este equipo: se sube sola';
     setTimeout(() => { msg.textContent = ''; }, 2500);
-    pintarLibreta(fila.id);
     actividad('libreta_nota', fila.id);
+    // v1.0.3: la hoja baja y la nota cae arriba de la lista
+    if (hojaAbierta) cerrarHoja(false, () => pintarLibreta(fila.id)); else { guardarBorrador(); pintarLibreta(fila.id); }
     subirLibreta();
   }
   // v1.0.1 — tiempo real mientras la libreta está abierta (lo hecho en la compu aparece o desaparece solo)
@@ -255,6 +326,11 @@
     if (!s) { alert('Para usar el Anotador, primero entrá a la app.'); return; }
     uid = s.user && s.user.id;
     crearLibreta();
+    let borrador = '';
+    try { borrador = localStorage.getItem(kBorrador()) || ''; } catch (e) { /* sin storage */ }
+    libreta.querySelector('.an-lib-in').value = borrador;
+    libreta.querySelector('.an-lib-listo').disabled = !borrador.trim();
+    pintarTocar();
     libreta.classList.add('an-vis'); abierto = true;
     document.documentElement.style.overflow = 'hidden';
     try { history.pushState({ anotador: 1 }, ''); } catch (e) { /* nada */ }
@@ -264,7 +340,11 @@
   }
   window.addEventListener('online', () => { if (libreta) { pintarLibreta(); subirLibreta(); } });
   window.addEventListener('offline', () => { if (libreta) pintarLibreta(); });
-  window.addEventListener('popstate', () => { if (libreta && libreta.classList.contains('an-vis')) cerrar(true); });
+  window.addEventListener('popstate', () => {
+    if (!libreta || !libreta.classList.contains('an-vis')) return;
+    if (hojaAbierta) { cerrarHoja(true); return; }                       // "atrás" con la hoja: baja la hoja (queda el borrador)
+    if (!(history.state && history.state.anotador)) cerrar(true);         // "atrás" con la lista: cierra la libreta
+  });
 
   // ── abrir / cerrar ──
   function abrir() { if (CEL.matches) abrirLibreta(); else abrirVentana(); }
@@ -272,9 +352,16 @@
     abierto = false;
     if (overlay) overlay.classList.remove('an-vis');
     if (libreta && libreta.classList.contains('an-vis')) {
+      let pasos = 1;
+      if (hojaAbierta) {                                                  // v1.0.3: la hoja se cierra sin animación (queda el borrador)
+        hojaAbierta = false; guardarBorrador();
+        libreta.querySelector('.an-velo').classList.remove('an-vis');
+        const h = libreta.querySelector('.an-hoja'); h.classList.remove('an-vis', 'an-baja'); h.style.bottom = '';
+        if (history.state && history.state.hoja) pasos = 2;
+      }
       libreta.classList.remove('an-vis'); document.documentElement.style.overflow = '';
       dejarDeEscuchar();
-      if (!porAtras && history.state && history.state.anotador) { try { history.back(); } catch (e) { /* nada */ } }
+      if (!porAtras && history.state && history.state.anotador) { try { history.go(-pasos); } catch (e) { /* nada */ } }
     }
     const b = document.getElementById('an-btn'); if (b && !CEL.matches) b.focus();
   }

@@ -18,6 +18,15 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <!--
+  Anotador v1.2.1 (14-nov-2026) — correcciones de la prueba en el celular. Sin SQL nuevo.
+  · El # en el texto ya NO crea etiquetas (el corrector del teclado generaba etiquetas cortadas).
+    Las etiquetas se crean y se eligen solo con "+ etiqueta". Las que ya existen quedan; la × solo las saca.
+  · Celular = ancho hasta 560 px, o equipo táctil con el lado corto hasta 560 px. Apaisado sigue
+    siendo celular (no aparece el Pizarrón). La tablet (lado corto ~800 px) se trata como compu.
+  · Aviso de versión nueva (como Vale Digital): al volver a la app y cada 10 minutos, franja
+    "Hay una versión nueva · Actualizar". En modo ventana no aparece (lo abre la PWA de nuevo cada vez).
+-->
+<!--
   Anotador v1.2.0 (13-nov-2026) — Etapa 3: modo ventana (lo abre anotador.js desde otra PWA). Sin SQL nuevo.
   · ?embed=1 dentro de un iframe: no pide código. La PWA que lo abre le presta su sesión (token por
     postMessage, mismo sitio goeapp.github.io) y es la única que la renueva; el Anotador nunca la renueva.
@@ -282,11 +291,16 @@ button.luz { cursor: pointer; padding: 0; }
 .aviso.visible { opacity: 1; transform: none; pointer-events: auto; }
 .aviso button { background: transparent; border: 0; color: #fbbf24; font-weight: 700; font-size: .8rem; letter-spacing: .04em; padding: 0; }
 
+/* ── AVISO DE VERSIÓN NUEVA (v1.2.1, como Vale Digital) ── */
+#franja-version { position: sticky; top: var(--header-h); z-index: 990; display: flex; align-items: center; justify-content: center; gap: 12px; background: var(--tag-bg); color: var(--tag-fg); border-bottom: 1px solid #fcd34d; padding: 7px 14px; font-size: .8rem; font-weight: 600; }
+#franja-version button { border: 1px solid var(--accent-border); background: var(--accent); color: #fff; border-radius: var(--radius-sm); padding: 4px 12px; font-size: .76rem; font-weight: 700; }
+#franja-version button:hover { background: #b45309; }
+
 /* Botón + (celular) */
 #fab { display: none; position: fixed; right: 18px; bottom: calc(22px + env(safe-area-inset-bottom)); width: 58px; height: 58px; border-radius: 50%; background: var(--accent); border: 0; color: #fff; font-size: 1.7rem; align-items: center; justify-content: center; box-shadow: 0 6px 18px rgba(217,119,6,.5); z-index: 1050; }
 
 /* ── CELULAR ── */
-@media (max-width: 560px) {
+@media (max-width: 560px), (pointer: coarse) and (max-height: 560px) {   /* v1.2.1: celular también apaisado */
   #app-header { padding: 6px 8px 6px 4px; gap: 6px; }
   .hdr-back { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; background: transparent; border: 0; color: #fff; font-size: 1.4rem; }
   .hdr-logo i, .hdr-version, .hdr-email, .kbd { display: none; }
@@ -332,7 +346,7 @@ button.luz { cursor: pointer; padding: 0; }
 .hdr-tab:hover { border-color: var(--accent); color: var(--accent); }
 .hdr-tab.activa { background: var(--accent); border-color: var(--accent-border); color: #fff; }
 .hdr-tab .cnt { font-size: .68rem; opacity: .85; }
-@media (max-width: 560px) { .hdr-tabs, #pizarron { display: none !important; } }
+@media (max-width: 560px), (pointer: coarse) and (max-height: 560px) { .hdr-tabs, #pizarron { display: none !important; } }
 
 /* ── PIZARRÓN (v1.1.0) ── */
 body.modo-pz main { max-width: none; padding: 14px 18px 18px; }
@@ -454,6 +468,7 @@ body.modo-pz #pizarron { display: flex; }
     <button class="hdr-email" id="hdr-email" title="Sesión"></button>
     <button class="hdr-ic hidden" id="btn-cerrar-embed" aria-label="Cerrar el Anotador (Esc)" title="Cerrar (Esc)"><i class="ti ti-x"></i><span class="txt-instalar">Esc</span></button>
   </header>
+  <div id="franja-version" class="hidden" role="status"><span>Hay una versión nueva</span><button id="btn-actualizar">Actualizar</button></div>
 
   <main id="main">
     <div class="barra-nueva" id="barra-nueva">
@@ -534,9 +549,9 @@ body.modo-pz #pizarron { display: flex; }
 
 <script>
 // ============================================================
-// Anotador — index_anotador_v1_2_0.html  (subir como index.html al repo goeapp/anotador)
+// Anotador — index_anotador_v1_2_1.html  (subir como index.html al repo goeapp/anotador)
 // ============================================================
-const APP_VERSION   = 'v1.2.0';
+const APP_VERSION   = 'v1.2.1';
 const SUPABASE_URL  = 'https://uhuftsxrzwhmvzygcuvp.supabase.co';
 const SUPABASE_KEY  = 'sb_publishable_TCibRAnzgaDIbn_MIirw6w_FltKG8X3';
 const REDIRECT_MAIL = 'https://goeapp.github.io/anotador/';
@@ -557,7 +572,8 @@ const COLORES = ['amarillo', 'verde', 'rosa', 'celeste', 'naranja', 'lila'];
 const COLOR_FUERTE = { amarillo: '#facc15', verde: '#4ade80', rosa: '#f472b6', celeste: '#38bdf8', naranja: '#fb923c', lila: '#c084fc' };
 const PAPELERA_DIAS = 30;
 const TOP_ETQ = 6;
-const MQ_CEL = window.matchMedia ? window.matchMedia('(max-width: 560px)') : { matches: false };
+const CEL_MQ = '(max-width: 560px), (pointer: coarse) and (max-height: 560px)';   // v1.2.1: celular = ancho chico, o táctil con el lado corto chico (apaisado)
+const MQ_CEL = window.matchMedia ? window.matchMedia(CEL_MQ) : { matches: false };
 function esCelular_() { return !!MQ_CEL.matches; }
 
 document.getElementById('version-label').textContent = APP_VERSION;
@@ -825,16 +841,11 @@ function nuevaNota_(datos) {
     creada: ahora, actualizada: ahora, borrada_at: null
   }, datos || {});
 }
-/** #algo en el texto también crea la etiqueta (no se explica en pantalla). */
-function etiquetasDelTexto_(t) {
-  const out = [], re = /(^|[\s(])#([\p{L}\p{N}_\-]{2,40})/gu;
-  let m; while ((m = re.exec(t || ''))) out.push(m[2]);
-  return out;
-}
-/** Guarda un cambio: en el equipo al instante, a la base enseguida. */
+/** Guarda un cambio: en el equipo al instante, a la base enseguida.
+ *  v1.2.1: el #algo del texto ya no crea etiquetas (solo "+ etiqueta"). */
 function guardarNota_(n, cambios) {
   Object.assign(n, cambios || {});
-  n.etiquetas = normLista((n.etiquetas || []).concat(etiquetasDelTexto_(n.texto)));
+  n.etiquetas = normLista(n.etiquetas || []);
   n.actualizada = new Date().toISOString();
   notas[n.id] = n;
   cola[n.id] = ++rev;
@@ -1336,10 +1347,7 @@ document.getElementById('nf-etqs').addEventListener('click', e => {
     const n = notas[abiertaId]; if (!n) return;
     const et = q.dataset.quitar;
     guardarFull_();
-    // si la etiqueta vino de un #algo del texto, se le saca el # (la palabra queda)
-    const t2 = (n.texto || '').replace(/(^|[\s(])#([\p{L}\p{N}_\-]{2,40})/gu, (m, a, w) => normEtq(w) === et ? a + w : m);
-    fullTxt.value = t2;
-    cambiarFull_({ texto: t2, etiquetas: (n.etiquetas || []).filter(x => x !== et) });
+    cambiarFull_({ etiquetas: (n.etiquetas || []).filter(x => x !== et) });   // v1.2.1: solo saca la etiqueta; el texto no se toca
     return;
   }
   const b = e.target.closest('#btn-nf-etq'); if (b) abrirPopEtq_(b);
@@ -1627,6 +1635,34 @@ document.getElementById('btn-instalar').addEventListener('click', async () => {
 if (!EMBED && 'serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch(err => console.warn('[sw] no registrado:', err.message));
 }
+// ── AVISO DE VERSIÓN NUEVA (v1.2.1, como Vale Digital): al volver a la app y cada 10 minutos ──
+// Lee el index.html publicado (siempre de la red: sw.js no guarda los pedidos con ?ver=) y compara APP_VERSION.
+const VERSION_CADA_MS = 10 * 60 * 1000;
+let versionNueva = null;
+async function revisarVersion_() {
+  if (EMBED || versionNueva || !navigator.onLine || location.protocol === 'file:') return;
+  try {
+    const r = await fetch('index.html?ver=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) return;
+    const m = (await r.text()).match(/const APP_VERSION\s*=\s*'([^']+)'/);
+    if (m && m[1] !== APP_VERSION) {
+      versionNueva = m[1];
+      document.getElementById('franja-version').classList.remove('hidden');
+      registrarActividad_('version_nueva', versionNueva, 'OK', { actual: APP_VERSION });
+    }
+  } catch (e) { /* sin red: se prueba la próxima vez */ }
+}
+document.getElementById('btn-actualizar').addEventListener('click', async () => {
+  const b = document.getElementById('btn-actualizar'); b.disabled = true; b.textContent = 'Actualizando…';
+  if (abiertaId) guardarFull_(); if (barraId) guardarBarra_();
+  try { await subir_(); } catch (e) { /* lo que quede, queda en el equipo */ }
+  try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) await reg.update(); } catch (e) { /* nada */ }
+  registrarActividad_('actualizar', versionNueva || '', 'OK', { desde: APP_VERSION });
+  location.reload();
+});
+document.addEventListener('visibilitychange', () => { if (!document.hidden) revisarVersion_(); });
+setInterval(revisarVersion_, VERSION_CADA_MS);
+setTimeout(revisarVersion_, 3000);
 // ══════════════════════════════════════════════════════════════
 // MODO VENTANA (v1.2.0) — sesión prestada por la PWA
 // ══════════════════════════════════════════════════════════════

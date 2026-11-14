@@ -1,6 +1,7 @@
-// Anotador — sw_v1_2_0.js  (subir como sw.js al repo goeapp/anotador)
+// Anotador — sw_v1_2_1.js  (subir como sw.js al repo goeapp/anotador)
+// v1.2.1: el chequeo de versión nueva (index.html?ver=…) va siempre a la red y no se guarda.
 // Guarda la app en el equipo para que abra sin señal. Los datos van por Supabase (nunca se guardan acá).
-const CACHE = 'anotador-v1.2.0';
+const CACHE = 'anotador-v1.2.1';
 const APP = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 const CDN = [
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js',
@@ -18,6 +19,7 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.hostname.endsWith('supabase.co')) return;                  // datos: siempre a la red
+  if (url.searchParams.has('ver')) return;                           // chequeo de versión: siempre a la red
   // La página: primero la red (para tener la última versión), si no hay señal, lo guardado
   if (req.mode === 'navigate') {
     e.respondWith(fetch(req).then(r => { const c = r.clone(); caches.open(CACHE).then(k => k.put('./index.html', c)); return r; })

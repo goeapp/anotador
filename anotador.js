@@ -1,5 +1,8 @@
 /* ============================================================
-   anotador.js — v1.0.3 (14-nov-2026) · subir como anotador.js al repo goeapp/anotador
+   anotador.js — v1.0.4 (20-nov-2026) · subir como anotador.js al repo goeapp/anotador
+   v1.0.4 — Hoja de la libreta con renglones suaves (solo la hoja grande; el campo "Anotá algo…"
+            queda liso). Cada nota muestra cuántas novedades vigentes tiene (se agregan en el
+            Anotador v1.3.0; desde la libreta no se agregan).
    v1.0.3 — Celular también apaisado: se reconoce por el lado corto de la pantalla en equipos táctiles
             (la tablet sigue como compu). Libreta: al tocar "Anotá algo…" sube una hoja cuadriculada
             encima de la lista (la lista queda atrás, oscurecida). "Listo" la baja y la nota cae arriba;
@@ -26,7 +29,7 @@
 (function () {
   'use strict';
   if (window.Anotador) return;
-  const VERSION = 'v1.0.3';
+  const VERSION = 'v1.0.4';
   const BASE = 'https://goeapp.github.io/anotador/';
   const ORIGEN = new URL(BASE).origin;
   const CEL_MQ = '(max-width: 560px), (pointer: coarse) and (max-height: 560px)';   // v1.0.3: igual que el Anotador v1.2.1
@@ -46,6 +49,7 @@
   const guardar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* sin storage */ } };
   const ICONO = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2z"/><path d="M9 7h6"/><path d="M9 11h6"/><path d="M9 15h4"/></svg>';
   const ATRAS = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M5 12l6 6"/><path d="M5 12l6 -6"/></svg>';
+  const HIST = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8l0 4l2 2"/><path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"/></svg>';
   const NUBE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a4.6 4.4 0 0 1 0 -9a5 4.5 0 0 1 11 2h1a3.5 3.5 0 0 1 0 7h-1"/><path d="M12 13v9"/><path d="M9 16l3 -3l3 3"/></svg>';
 
   function contexto() {
@@ -81,7 +85,7 @@
 .an-lib-senal { font-size:.72rem; font-weight:700; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:99px; padding:2px 9px; }
 .an-lib-cab { position:relative; z-index:3; }
 .an-lib-nueva { padding:12px; display:flex; flex-direction:column; gap:6px; border-bottom:1px solid #e2e8f0; background:#fff; }
-.an-cuad { background-color:#fef9c3; background-image:linear-gradient(rgba(146,64,14,.09) 1px, transparent 1px), linear-gradient(90deg, rgba(146,64,14,.09) 1px, transparent 1px); background-size:22px 22px; background-position:-1px -1px; }
+.an-papel { background-color:#fef9c3; }
 .an-lib-tocar { width:100%; min-height:66px; border:1px solid #eab308; border-radius:6px 6px 6px 16px; padding:10px 12px; font:inherit; font-size:1rem; line-height:22px; color:#94a3b8; text-align:left; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; white-space:pre-wrap; overflow-wrap:anywhere; }
 .an-lib-tocar.an-con-borrador { color:#1e293b; }
 .an-lib-fila { display:flex; align-items:center; gap:10px; min-height:18px; }
@@ -94,7 +98,8 @@
 @media (max-height: 500px) { .an-hoja { top:calc(84px + env(safe-area-inset-top)); } }   /* apaisado: más hoja, franja oscura más chica */
 @keyframes an-hoja-sube { from { transform:translateY(60%) rotate(-1.5deg) scale(.96); opacity:.2; } to { transform:none; opacity:1; } }
 @keyframes an-hoja-baja { to { transform:translateY(40%) scale(.94); opacity:0; } }
-.an-hoja textarea { flex:1; width:100%; border:0; outline:0; resize:none; background:transparent; font:inherit; font-size:1.05rem; line-height:22px; padding:11px 14px; color:#1e293b; background-attachment:local; }
+.an-hoja textarea { flex:1; width:100%; border:0; outline:0; resize:none; background:transparent; font:inherit; font-size:1.05rem; line-height:22px; padding:11px 14px; color:#1e293b; }
+.an-hoja textarea { background-image:linear-gradient(transparent 21px, rgba(146,64,14,.17) 21px); background-size:100% 22px; background-position:0 11px; background-attachment:local; }   /* v1.0.4: renglones */
 .an-hoja-pie { display:flex; align-items:center; gap:10px; padding:8px 10px 10px 14px; background:rgba(254,249,195,.94); border-top:1px solid rgba(234,179,8,.5); }
 .an-hoja-pie .an-hoja-ayuda { flex:1; font-size:.74rem; color:#92400e; }
 .an-lib-listo { border:1px solid #92400e; background:#d97706; color:#fff; border-radius:8px; padding:0 22px; height:44px; font:inherit; font-weight:700; font-size:.9rem; }
@@ -107,6 +112,7 @@
 .an-lib-nota.an-abierta .an-lib-txt { -webkit-line-clamp:unset; display:block; }
 .an-lib-pie { font-size:.72rem; color:#475569; margin-top:6px; display:flex; align-items:center; gap:6px; }
 .an-lib-pie .an-pend { color:#b45309; display:inline-flex; }
+.an-lib-pie .an-nov { display:inline-flex; align-items:center; gap:2px; }
 .an-lib-vacio, .an-lib-nota-pie { font-size:.82rem; color:#64748b; text-align:center; padding:18px 10px; }
 .an-entra { animation:an-sube .25s ease-out; }
 @media (prefers-reduced-motion: reduce) { .an-ov.an-vis, .an-lib.an-vis, .an-entra, .an-hoja.an-vis, .an-hoja.an-baja { animation:none; } .an-velo { transition:none; } }`;
@@ -172,11 +178,11 @@
     libreta.innerHTML =
       '<div class="an-lib-cab"><button type="button" class="an-lib-atras" aria-label="Volver">' + ATRAS + '</button>' +
       '<span class="an-lib-tit">' + ICONO + ' ANOTADOR</span><span class="an-lib-senal" hidden>Sin señal</span></div>' +
-      '<div class="an-lib-nueva"><button type="button" class="an-lib-tocar an-cuad" aria-label="Nota nueva">Anotá algo…</button>' +
+      '<div class="an-lib-nueva"><button type="button" class="an-lib-tocar an-papel" aria-label="Nota nueva">Anotá algo…</button>' +
       '<div class="an-lib-fila"><span class="an-lib-msg"></span></div></div>' +
       '<div class="an-lib-lista" aria-live="polite"></div>' +
       '<div class="an-velo"></div>' +
-      '<div class="an-hoja an-cuad" role="dialog" aria-label="Nota nueva"><textarea class="an-lib-in" placeholder="Anotá algo…" aria-label="Texto de la nota"></textarea>' +
+      '<div class="an-hoja an-papel" role="dialog" aria-label="Nota nueva"><textarea class="an-lib-in" placeholder="Anotá algo…" aria-label="Texto de la nota"></textarea>' +
       '<div class="an-hoja-pie"><span class="an-hoja-ayuda">Tocá la parte oscura para seguir después</span><button type="button" class="an-lib-listo" disabled>Listo</button></div></div>';
     document.body.appendChild(libreta);
     const ta = libreta.querySelector('.an-lib-in'), bt = libreta.querySelector('.an-lib-listo');
@@ -191,7 +197,7 @@
     libreta.querySelector('.an-lib-lista').addEventListener('click', e => { const n = e.target.closest('.an-lib-nota'); if (n) n.classList.toggle('an-abierta'); });
     if (window.visualViewport) visualViewport.addEventListener('resize', ajustarHoja);
   }
-  // ── hoja cuadriculada (v1.0.3): sube encima de la lista para escribir con espacio ──
+  // ── hoja (v1.0.3; con renglones desde v1.0.4): sube encima de la lista para escribir con espacio ──
   function guardarBorrador() {
     clearTimeout(borradorTimer);
     if (!libreta || !uid) return;
@@ -242,7 +248,8 @@
     libreta.querySelector('.an-lib-lista').innerHTML = lista.length
       ? lista.map(n => '<button type="button" class="an-lib-nota c-' + esc(n.color || 'amarillo') + (n.id === nuevoId ? ' an-entra' : '') + '">' +
           '<div class="an-lib-txt">' + esc(n.texto) + '</div>' +
-          '<div class="an-lib-pie">' + fecha(n.creada) + (pend.has(n.id) ? ' <span class="an-pend" title="Falta subir">' + NUBE + '</span>' : '') + '</div></button>').join('') +
+          '<div class="an-lib-pie">' + fecha(n.creada) +
+            (n.nov ? ' · <span class="an-nov" title="' + n.nov + (n.nov === 1 ? ' novedad' : ' novedades') + ' (se ven en la compu)">' + HIST + n.nov + '</span>' : '') + (pend.has(n.id) ? ' <span class="an-pend" title="Falta subir">' + NUBE + '</span>' : '') + '</div></button>').join('') +
         '<div class="an-lib-nota-pie">Las notas completas, con colores y etiquetas, en la compu.</div>'
       : '<div class="an-lib-vacio">Todavía no hay notas. Escribí arriba y tocá Listo.</div>';
   }
@@ -256,9 +263,20 @@
       if (r.error) throw r.error;
       const pend = new Set(colaLib.map(f => f.id));
       notasLib = (r.data || []).filter(n => !n.borrada_at && (n.texto || '').trim()).concat(notasLib.filter(n => pend.has(n.id) && !(r.data || []).some(x => x.id === n.id)));
+      await contarNovedades();
       guardar(kNotas(), notasLib);
       pintarLibreta();
     } catch (e) { console.warn('[anotador] libreta', e && e.message); }
+  }
+  /** v1.0.4: cuántas novedades vigentes tiene cada nota (si la tabla no está, no pasa nada). */
+  async function contarNovedades() {
+    try {
+      const r = await sb.from('an_novedades').select('nota_id').is('tachada_at', null);
+      if (r.error) throw r.error;
+      const cnt = {};
+      (r.data || []).forEach(x => { cnt[x.nota_id] = (cnt[x.nota_id] || 0) + 1; });
+      notasLib.forEach(n => { n.nov = cnt[n.id] || 0; });
+    } catch (e) { console.warn('[anotador] novedades', e && e.message); }
   }
   async function subirLibreta() {
     if (!colaLib.length || !navigator.onLine) return;
@@ -304,8 +322,9 @@
             if (id && !pend.has(id)) notasLib = notasLib.filter(n => n.id !== id);
           } else {
             const r = p.new; if (!r || pend.has(r.id)) return;
+            const antes = notasLib.find(n => n.id === r.id);
             notasLib = notasLib.filter(n => n.id !== r.id);
-            if (!r.borrada_at && (r.texto || '').trim()) notasLib.push({ id: r.id, texto: r.texto, color: r.color, creada: r.creada });
+            if (!r.borrada_at && (r.texto || '').trim()) notasLib.push({ id: r.id, texto: r.texto, color: r.color, creada: r.creada, nov: antes ? antes.nov : 0 });
           }
           guardar(kNotas(), notasLib);
           pintarLibreta();

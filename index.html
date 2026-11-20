@@ -18,6 +18,17 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <!--
+  Anotador v1.3.0 (20-nov-2026) — NOVEDADES: línea de tiempo dentro de cada nota.
+  Requiere an_esquema_v1_3_0.sql (tabla an_novedades) y sw_v1_3_0.js.
+  · Nota abierta: compu, panel a la derecha; celular, debajo del texto, sobre el mismo papel.
+    Campo "Agregá una novedad" arriba; la más nueva arriba, se recorre con el scroll.
+  · No se editan. La × la tacha (con Deshacer unos segundos); la tachada sigue visible, tachada,
+    con un botón para destacharla (vuelve con su fecha original).
+  · Tarjeta: contador en el pie y la última novedad vigente debajo del texto, en una línea con su fecha.
+  · Igual que las notas: primero en el equipo, se suben solas, sin señal quedan con la nube; tiempo real.
+  · Actividad: novedad_agregar, novedad_tachar, novedad_destachar.
+-->
+<!--
   Anotador v1.2.1 (14-nov-2026) — correcciones de la prueba en el celular. Sin SQL nuevo.
   · El # en el texto ya NO crea etiquetas (el corrector del teclado generaba etiquetas cortadas).
     Las etiquetas se crean y se eligen solo con "+ etiqueta". Las que ya existen quedan; la × solo las saca.
@@ -247,6 +258,9 @@ button.luz { cursor: pointer; padding: 0; }
 .nf-volver { display: inline-flex; align-items: center; gap: 6px; background: rgba(15,23,42,.06); border: 1px solid rgba(15,23,42,.12); color: var(--text); border-radius: var(--radius-sm); height: 34px; padding: 0 12px; font-size: .8rem; font-weight: 600; }
 .nf-colores { display: flex; gap: 8px; align-items: center; margin-right: 6px; }
 .nf-barra .ic { width: 34px; height: 34px; font-size: 1.05rem; }
+.nf-centro { flex: 1; min-height: 0; display: flex; }
+.nf-col { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+@media (max-width: 860px) { .nf-nov { width: 280px; } }
 .nf-cuerpo { flex: 1; overflow-y: auto; padding: 30px max(24px, calc((100% - 900px) / 2)) 10px; }
 .nf-cuerpo textarea { width: 100%; height: 100%; min-height: 50vh; border: 0; outline: 0; resize: none; background: transparent; font-size: 1.15rem; line-height: 1.65; color: var(--text); }
 .nf-pie { padding: 0 max(24px, calc((100% - 900px) / 2)) 22px; display: flex; flex-direction: column; gap: 12px; }
@@ -258,6 +272,37 @@ button.luz { cursor: pointer; padding: 0; }
 .nf-estado { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; }
 .nf-estado.ok { color: #15803d; }
 .nf-estado.pend { color: #b45309; }
+
+/* ── NOVEDADES (v1.3.0): línea de tiempo de la nota ── */
+.nf-nov { flex: none; width: 340px; border-left: 1px solid rgba(15,23,42,.10); background: rgba(255,255,255,.38); display: flex; flex-direction: column; min-height: 0; }
+.nov-cab { padding: 18px 18px 10px; }
+.nov-tit { display: flex; align-items: center; gap: 6px; font-size: .7rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted2); margin-bottom: 10px; }
+.nov-tit .cnt { font-weight: 700; background: rgba(15,23,42,.08); border-radius: 99px; padding: 0 7px; letter-spacing: 0; }
+.nov-in { display: flex; gap: 6px; }
+.nov-in input { flex: 1; min-width: 0; height: 36px; border: 1px solid rgba(15,23,42,.18); border-radius: var(--radius-sm); background: rgba(255,255,255,.75); padding: 0 10px; font-size: .86rem; color: var(--text); }
+.nov-in input:focus { outline: none; border-color: var(--accent); background: #fff; }
+.nov-in input:disabled { opacity: .55; }
+.nov-in .ic { width: 36px; height: 36px; font-size: 1.05rem; }
+.nov-ayuda { font-size: .74rem; color: var(--muted2); margin-top: 6px; }
+.nov-lista { flex: 1; overflow-y: auto; padding: 6px 18px 18px; }
+.nov-vacia { font-size: .78rem; color: var(--muted2); line-height: 1.5; padding: 4px 0; }
+.nov-it { position: relative; margin-left: 5px; padding: 0 30px 14px 18px; border-left: 2px solid rgba(15,23,42,.13); }
+.nov-it:last-child { border-left-color: transparent; }
+.nov-it::before { content: ''; position: absolute; left: -7px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--punto, #facc15); border: 2px solid #fff; box-sizing: border-box; }
+.nov-fe { font-size: .7rem; color: var(--muted2); display: flex; align-items: center; gap: 4px; }
+.nov-fe .sin-subir { color: #b45309; display: inline-flex; }
+.nov-tx { font-size: .86rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.nov-it.tachada::before { background: #cbd5e1; }
+.nov-it.tachada .nov-tx { text-decoration: line-through; color: var(--muted); }
+.nov-acc { position: absolute; right: 0; top: -2px; width: 26px; height: 26px; border: 0; background: transparent; border-radius: 6px; color: var(--muted2); display: inline-flex; align-items: center; justify-content: center; font-size: .95rem; padding: 0; }
+.nov-acc:hover { background: rgba(15,23,42,.08); color: var(--text); }
+@keyframes nov-entra { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.nov-it.entra { animation: nov-entra .25s ease-out; }
+/* Tarjeta: última novedad + contador */
+.nota-nov { display: flex; gap: 6px; align-items: baseline; margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(15,23,42,.14); font-size: .78rem; min-width: 0; }
+.nota-nov .f { flex: none; font-size: .68rem; font-weight: 700; color: var(--muted2); }
+.nota-nov .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nota-pie .nov-cnt { display: inline-flex; align-items: center; gap: 2px; }
 
 /* ── PAPELERA ── */
 .overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 1250; align-items: center; justify-content: center; padding: 20px; }
@@ -330,7 +375,17 @@ button.luz { cursor: pointer; padding: 0; }
   .nf-volver { height: 40px; }
   .nf-cuerpo { padding: 18px 16px 6px; }
   .nf-cuerpo textarea { font-size: 1.05rem; }
-  .nf-pie { padding: 0 16px calc(16px + env(safe-area-inset-bottom)); }
+  .nf-pie { padding: 0 16px 14px; }
+  /* v1.3.0: en el celular las novedades van debajo, sobre el mismo papel; scrollea toda la nota */
+  .nf-centro { display: block; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .nf-col { display: block; }
+  .nf-cuerpo { overflow: visible; }
+  .nf-cuerpo textarea { height: auto; min-height: 30vh; overflow: hidden; }
+  .nf-nov { width: auto; display: block; border-left: 0; border-top: 1px solid rgba(15,23,42,.14); background: transparent; }
+  .nov-cab { padding: 14px 16px 8px; }
+  .nov-in input { height: 42px; font-size: 1rem; }
+  .nov-in .ic { width: 42px; height: 42px; }
+  .nov-lista { overflow: visible; padding: 6px 16px calc(24px + env(safe-area-inset-bottom)); }
   .aviso { left: 12px; right: 12px; bottom: calc(96px + env(safe-area-inset-bottom)); justify-content: space-between; }
   .pop { width: calc(100vw - 32px); max-width: 340px; }
 }
@@ -518,10 +573,25 @@ body.modo-pz #pizarron { display: flex; }
     <button class="ic" id="nf-copiar" aria-label="Copiar texto" title="Copiar texto"><i class="ti ti-copy"></i></button>
     <button class="ic" id="nf-papelera" aria-label="Enviar a la papelera" title="Enviar a la papelera"><i class="ti ti-trash"></i></button>
   </div>
-  <div class="nf-cuerpo"><textarea id="nf-texto" placeholder="Escribí una nota…" aria-label="Texto de la nota"></textarea></div>
-  <div class="nf-pie">
-    <div class="nf-etqs" id="nf-etqs"></div>
-    <div class="nf-info" id="nf-info"></div>
+  <div class="nf-centro" id="nf-centro">
+    <div class="nf-col">
+      <div class="nf-cuerpo"><textarea id="nf-texto" placeholder="Escribí una nota…" aria-label="Texto de la nota"></textarea></div>
+      <div class="nf-pie">
+        <div class="nf-etqs" id="nf-etqs"></div>
+        <div class="nf-info" id="nf-info"></div>
+      </div>
+    </div>
+    <aside class="nf-nov" id="nf-nov" aria-label="Novedades">
+      <div class="nov-cab">
+        <div class="nov-tit"><i class="ti ti-history"></i> Novedades <span class="cnt hidden" id="nov-cnt"></span></div>
+        <div class="nov-in">
+          <input type="text" id="nov-input" placeholder="Agregá una novedad" aria-label="Novedad nueva" autocomplete="off" enterkeyhint="send" maxlength="4000">
+          <button class="ic" id="nov-agregar" aria-label="Agregar novedad" title="Agregar (Enter)"><i class="ti ti-plus"></i></button>
+        </div>
+        <div class="nov-ayuda hidden" id="nov-ayuda">Escribí la nota para sumarle novedades.</div>
+      </div>
+      <div class="nov-lista" id="nov-lista" aria-live="polite"></div>
+    </aside>
   </div>
 </div>
 
@@ -549,9 +619,9 @@ body.modo-pz #pizarron { display: flex; }
 
 <script>
 // ============================================================
-// Anotador — index_anotador_v1_2_1.html  (subir como index.html al repo goeapp/anotador)
+// Anotador — index_anotador_v1_3_0.html  (subir como index.html al repo goeapp/anotador)
 // ============================================================
-const APP_VERSION   = 'v1.2.1';
+const APP_VERSION   = 'v1.3.0';
 const SUPABASE_URL  = 'https://uhuftsxrzwhmvzygcuvp.supabase.co';
 const SUPABASE_KEY  = 'sb_publishable_TCibRAnzgaDIbn_MIirw6w_FltKG8X3';
 const REDIRECT_MAIL = 'https://goeapp.github.io/anotador/';
@@ -594,6 +664,8 @@ const CTX = {   // v1.2.0: en modo ventana se actualiza cada vez que se abre (an
 let emailActual = '', nombreActual = '', uidActual = '';
 let notas = {};              // id → nota (lo que hay en este equipo)
 let cola = {};               // id → rev: cambios por subir
+let novedades = {};          // v1.3.0: id → novedad { id, nota_id, texto, creada, tachada_at }
+let colaNov = {};            // v1.3.0: id → rev: novedades por subir
 let rev = 0;
 let filtrosEtq = [];         // etiquetas tildadas (se combinan)
 let textoBuscar = '';
@@ -824,13 +896,20 @@ document.getElementById('btn-cerrar-sesion').addEventListener('click', async () 
 // ══════════════════════════════════════════════════════════════
 const keyNotas = () => 'an_notas_' + uidActual;
 const keyCola  = () => 'an_cola_' + uidActual;
+const keyNov   = () => 'an_nov_' + uidActual;          // v1.3.0
+const keyColaNov = () => 'an_nov_cola_' + uidActual;   // v1.3.0
 function guardarEquipo_() {
-  try { localStorage.setItem(keyNotas(), JSON.stringify(notas)); localStorage.setItem(keyCola(), JSON.stringify(cola)); }
+  try {
+    localStorage.setItem(keyNotas(), JSON.stringify(notas)); localStorage.setItem(keyCola(), JSON.stringify(cola));
+    localStorage.setItem(keyNov(), JSON.stringify(novedades)); localStorage.setItem(keyColaNov(), JSON.stringify(colaNov));
+  }
   catch (e) { console.warn('[equipo] no se pudo guardar', e); }
 }
 function leerEquipo_() {
   try { notas = JSON.parse(localStorage.getItem(keyNotas()) || '{}') || {}; } catch (e) { notas = {}; }
   try { cola = JSON.parse(localStorage.getItem(keyCola()) || '{}') || {}; } catch (e) { cola = {}; }
+  try { novedades = JSON.parse(localStorage.getItem(keyNov()) || '{}') || {}; } catch (e) { novedades = {}; }
+  try { colaNov = JSON.parse(localStorage.getItem(keyColaNov()) || '{}') || {}; } catch (e) { colaNov = {}; }
 }
 function nuevaNota_(datos) {
   const ahora = new Date().toISOString();
@@ -859,27 +938,53 @@ function filaBase_(n) {
     vale: n.vale || null, origen_url: n.origen_url || null, creada: n.creada, borrada_at: n.borrada_at || null,
     pz_x: n.pz_x == null ? null : n.pz_x, pz_y: n.pz_y == null ? null : n.pz_y };
 }
+function filaNov_(v) { return { id: v.id, nota_id: v.nota_id, texto: v.texto, creada: v.creada, tachada_at: v.tachada_at || null }; }
 function programarSubida_() { clearTimeout(subirTimer); subirTimer = setTimeout(subir_, 700); }
+/** Sube notas y después novedades (la novedad necesita que su nota ya esté en la base). */
 async function subir_() {
   clearTimeout(subirTimer);
   if (subiendo || !hayRed_()) return;
   const ids = Object.keys(cola).filter(id => notas[id]);
   Object.keys(cola).forEach(id => { if (!notas[id]) delete cola[id]; });
-  if (!ids.length) { pintarEstadoRed_(); return; }
+  Object.keys(colaNov).forEach(id => { if (!novedades[id] || !notas[novedades[id].nota_id]) delete colaNov[id]; });
+  const idsNov = Object.keys(colaNov);
+  if (!ids.length && !idsNov.length) { pintarEstadoRed_(); return; }
   subiendo = true;
   const revs = {}; ids.forEach(id => revs[id] = cola[id]);
-  try {
-    const { error } = await sb.from('an_notas').upsert(ids.map(id => filaBase_(notas[id])), { onConflict: 'id' });
-    if (error) throw error;
-    ids.forEach(id => { if (cola[id] === revs[id]) delete cola[id]; });
-    guardarEquipo_();
-  } catch (err) {
-    console.warn('[subir]', err && err.message);
-    registrarActividad_('subir', ids.length + ' notas', 'ERROR', { error: err && err.message });
+  const revsNov = {}; idsNov.forEach(id => revsNov[id] = colaNov[id]);
+  let notasOk = true;
+  if (ids.length) {
+    try {
+      const { error } = await sb.from('an_notas').upsert(ids.map(id => filaBase_(notas[id])), { onConflict: 'id' });
+      if (error) throw error;
+      ids.forEach(id => { if (cola[id] === revs[id]) delete cola[id]; });
+      guardarEquipo_();
+    } catch (err) {
+      notasOk = false;
+      console.warn('[subir]', err && err.message);
+      registrarActividad_('subir', ids.length + ' notas', 'ERROR', { error: err && err.message });
+    }
+  }
+  if (idsNov.length) {
+    // v1.3.0: solo las novedades cuya nota ya subió (si la nota sigue pendiente, esperan la próxima vuelta)
+    const listas = idsNov.filter(id => notasOk || !cola[novedades[id].nota_id]);
+    if (listas.length) {
+      try {
+        const { error } = await sb.from('an_novedades').upsert(listas.map(id => filaNov_(novedades[id])), { onConflict: 'id' });
+        if (error) throw error;
+        listas.forEach(id => { if (colaNov[id] === revsNov[id]) delete colaNov[id]; });
+        guardarEquipo_();
+      } catch (err) {
+        console.warn('[subir novedades]', err && err.message);
+        registrarActividad_('subir', listas.length + ' novedades', 'ERROR', { error: err && err.message });
+      }
+    }
   }
   subiendo = false;
   pintarEstadoRed_();
-  if (Object.keys(cola).some(id => !(id in revs) || cola[id] !== revs[id])) programarSubida_();
+  if (abiertaId) pintarNov_();
+  if (Object.keys(cola).some(id => !(id in revs) || cola[id] !== revs[id]) ||
+      Object.keys(colaNov).some(id => !(id in revsNov) || colaNov[id] !== revsNov[id])) programarSubida_();
 }
 /** Trae todo de la base y lo mezcla con lo del equipo (lo que falta subir gana). */
 async function bajar_() {
@@ -893,7 +998,23 @@ async function bajar_() {
     guardarEquipo_();
     pintar_();
   } catch (err) { console.warn('[bajar]', err && err.message); }
+  await bajarNov_();
 }
+/** v1.3.0: novedades de la base, mezcladas con lo del equipo (lo que falta subir gana). */
+async function bajarNov_() {
+  if (!hayRed_()) return;
+  try {
+    const { data, error } = await sb.from('an_novedades').select('id, nota_id, texto, creada, tachada_at').order('creada', { ascending: false });
+    if (error) throw error;
+    const remotas = {};
+    (data || []).forEach(r => { remotas[r.id] = true; if (!colaNov[r.id]) novedades[r.id] = desdeNov_(r); });
+    Object.keys(novedades).forEach(id => { if (!remotas[id] && !colaNov[id]) delete novedades[id]; });
+    guardarEquipo_();
+    pintar_();
+    if (abiertaId) pintarNov_();
+  } catch (err) { console.warn('[bajar novedades]', err && err.message); }
+}
+function desdeNov_(r) { return { id: r.id, nota_id: r.nota_id, texto: r.texto || '', creada: r.creada, tachada_at: r.tachada_at || null }; }
 function desdeFila_(r) {
   return { id: r.id, texto: r.texto || '', color: COLORES.includes(r.color) ? r.color : 'amarillo', anclada: !!r.anclada, luz: !!r.luz,
     etiquetas: r.etiquetas || [], etiquetas_auto: r.etiquetas_auto || [], pwa: r.pwa, obra: r.obra, vale: r.vale, origen_url: r.origen_url,
@@ -910,6 +1031,20 @@ function conectarRT_() {
         if (r.id === abiertaId || r.id === barraId || (arrastre && arrastre.id === r.id)) return;      // no pisar lo que se está escribiendo
         notas[r.id] = desdeFila_(r); guardarEquipo_(); pintar_();
       })
+      // v1.3.0: novedades en tiempo real (lo agregado o tachado en el otro equipo)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'an_novedades', filter: 'user_id=eq.' + uidActual }, p => {
+        let notaId = null;
+        if (p.eventType === 'DELETE') {
+          const id = p.old && p.old.id;
+          if (!id || colaNov[id] || !novedades[id]) return;
+          notaId = novedades[id].nota_id; delete novedades[id];
+        } else {
+          const r = p.new; if (!r || colaNov[r.id]) return;
+          novedades[r.id] = desdeNov_(r); notaId = r.nota_id;
+        }
+        guardarEquipo_(); pintar_();
+        if (abiertaId && abiertaId === notaId) pintarNov_();
+      })
       .subscribe();
   } catch (e) { console.warn('[rt]', e); }
 }
@@ -918,17 +1053,18 @@ async function purgarPapelera_() {
   const limite = Date.now() - PAPELERA_DIAS * 86400000;
   let cambio = false;
   Object.values(notas).forEach(n => { if (n.borrada_at && Date.parse(n.borrada_at) < limite && !cola[n.id]) { delete notas[n.id]; cambio = true; } });
+  Object.values(novedades).forEach(v => { if (!notas[v.nota_id] && !colaNov[v.id]) { delete novedades[v.id]; cambio = true; } });   // v1.3.0: se van con su nota
   if (cambio) guardarEquipo_();
   if (hayRed_()) { try { const r = await sb.rpc('an_purgar_papelera'); if (r && r.data) registrarActividad_('papelera_purgar', String(r.data), 'OK'); } catch (e) { /* nada */ } }
 }
 
 // ── ESTADO DE RED (pastilla "Sin señal" + nube) ──────────────
 function pintarEstadoRed_() {
-  const pend = Object.keys(cola).length;
+  const pend = Object.keys(cola).length + Object.keys(colaNov).length;
   document.getElementById('pill-senal').classList.toggle('hidden', navigator.onLine);
   const nube = document.getElementById('ic-nube');
   nube.classList.toggle('hidden', !pend);
-  nube.title = pend ? pend + (pend === 1 ? ' nota por subir' : ' notas por subir') : '';
+  nube.title = pend ? pend + (pend === 1 ? ' cambio por subir' : ' cambios por subir') : '';
   if (abiertaId) pintarInfoFull_();
   pintarEstadoBarra_();
 }
@@ -943,7 +1079,7 @@ async function entrar_(s, via) {
   emailActual = s.email; nombreActual = s.nombreApellido || s.email; uidActual = s.uid;
   document.getElementById('hdr-email').textContent = emailActual;
   leerEquipo_();
-  rev = Math.max(0, ...Object.values(cola).map(Number).filter(isFinite));
+  rev = Math.max(0, ...Object.values(cola).concat(Object.values(colaNov)).map(Number).filter(isFinite));
   mostrarPantalla('app');
   pintarAtras_();
   pintarEstadoRed_();
@@ -996,8 +1132,12 @@ function primeraLinea_(t) {
   if (lineas.length > 1 && lineas[0].trim() && lineas[0].length <= 80) return { tit: lineas[0].trim(), resto: lineas.slice(1).join('\n').replace(/^\n+/, '') };
   return { tit: '', resto: String(t || '') };
 }
+/** v1.3.0: novedades de una nota, la más nueva primero. */
+function novDe_(notaId) { return Object.values(novedades).filter(v => v.nota_id === notaId).sort((a, b) => Date.parse(b.creada) - Date.parse(a.creada) || (a.id < b.id ? 1 : -1)); }
 function htmlNota_(n) {
   const p = primeraLinea_(n.texto);
+  const vig = novDe_(n.id).filter(v => !v.tachada_at);
+  const ult = vig[0];
   const etqs = (n.etiquetas_auto || []).map(e => htmlEtq_(e, true)).join('') + (n.etiquetas || []).filter(e => !(n.etiquetas_auto || []).includes(e)).map(e => htmlEtq_(e, false)).join('');
   const origen = n.vale ? ' · ' + escaparHtml(n.vale) : '';
   const clases = ['nota', 'c-' + n.color];
@@ -1008,8 +1148,11 @@ function htmlNota_(n) {
     (n.luz ? '<span class="luz on" title="Luz prendida"><i class="ti ti-bulb"></i></span>' : '') +
     (p.tit ? '<div class="nota-tit">' + escaparHtml(p.tit) + '</div>' : '') +
     (p.resto ? '<div class="nota-txt">' + escaparHtml(p.resto) + '</div>' : '') +
+    (ult ? '<div class="nota-nov" title="Última novedad"><span class="f">' + fechaCorta(ult.creada) + '</span><span class="t">' + escaparHtml(ult.texto) + '</span></div>' : '') +
     (etqs ? '<div class="nota-etqs">' + etqs + '</div>' : '') +
-    '<div class="nota-pie">' + fechaCorta(n.creada) + origen + (cola[n.id] ? ' <span class="sin-subir" title="Falta subir"><i class="ti ti-cloud-upload"></i></span>' : '') + '</div>' +
+    '<div class="nota-pie">' + fechaCorta(n.creada) + origen +
+      (vig.length ? ' · <span class="nov-cnt" title="' + vig.length + (vig.length === 1 ? ' novedad' : ' novedades') + '"><i class="ti ti-history"></i>' + vig.length + '</span>' : '') +
+      (cola[n.id] || vig.some(v => colaNov[v.id]) ? ' <span class="sin-subir" title="Falta subir"><i class="ti ti-cloud-upload"></i></span>' : '') + '</div>' +
     '<div class="nota-acc">' +
       '<button class="ic" data-acc="color" aria-label="Color" title="Color"><i class="ti ti-palette"></i></button>' +
       '<button class="ic" data-acc="etiqueta" aria-label="Etiqueta" title="Etiqueta"><i class="ti ti-tag"></i></button>' +
@@ -1258,8 +1401,11 @@ function abrirNota_(id, conEtiqueta) {
   abiertaId = id;
   if (!cola[id] && !(n.texto || '').trim()) abiertaNueva = true;
   fullTxt.value = n.texto || '';
+  document.getElementById('nov-input').value = '';
   pintarFull_();
   full.classList.add('visible');
+  document.getElementById('nf-centro').scrollTop = 0;
+  autoAlto_();
   document.body.style.overflow = 'hidden';
   if (!esCelular_() || abiertaNueva) { fullTxt.focus(); fullTxt.setSelectionRange(fullTxt.value.length, fullTxt.value.length); }
   if (conEtiqueta) setTimeout(() => { const b = document.getElementById('btn-nf-etq'); if (b) abrirPopEtq_(b); }, 60);
@@ -1280,6 +1426,7 @@ function pintarFull_() {
     (n.etiquetas || []).filter(e => !auto.includes(e)).map(e => '<span class="etq usr">#' + escaparHtml(e) + '<button class="quitar" data-quitar="' + escaparHtml(e) + '" aria-label="Quitar etiqueta ' + escaparHtml(e) + '" title="Quitar">×</button></span>').join('') +
     '<button class="btn-etq" id="btn-nf-etq"><i class="ti ti-plus"></i> etiqueta</button>';
   pintarInfoFull_();
+  pintarNov_();
 }
 function pintarInfoFull_() {
   const n = notas[abiertaId]; if (!n) return;
@@ -1290,7 +1437,91 @@ function pintarInfoFull_() {
   document.getElementById('nf-info').innerHTML = '<span>Creada el ' + fechaLarga(n.creada) + '</span>' + (nombrePwa ? '<span>·</span><span>' + nombrePwa + '</span>' : '') + enlace + estado;
 }
 let fullTimer = null;
-fullTxt.addEventListener('input', () => { clearTimeout(fullTimer); fullTimer = setTimeout(guardarFull_, 400); });
+fullTxt.addEventListener('input', () => { clearTimeout(fullTimer); fullTimer = setTimeout(guardarFull_, 400); habilitarNov_(); autoAlto_(); });
+
+// ── NOVEDADES (v1.3.0): línea de tiempo de la nota abierta ──
+let novNuevaId = null;
+/** Celular: el texto crece con lo escrito (scrollea toda la nota, con las novedades abajo). */
+function autoAlto_() {
+  if (!esCelular_()) { fullTxt.style.height = ''; return; }
+  fullTxt.style.height = 'auto';
+  fullTxt.style.height = fullTxt.scrollHeight + 'px';
+}
+/** Sin texto en la nota todavía, no se pueden sumar novedades. */
+function habilitarNov_() {
+  const conTexto = !!fullTxt.value.trim();
+  const inp = document.getElementById('nov-input');
+  if (inp.disabled === !conTexto) return conTexto;
+  inp.disabled = !conTexto; document.getElementById('nov-agregar').disabled = !conTexto;
+  document.getElementById('nov-ayuda').classList.toggle('hidden', conTexto);
+  if (!document.getElementById('nov-lista').querySelector('.nov-it')) pintarNov_();
+  return conTexto;
+}
+function pintarNov_() {
+  const n = notas[abiertaId]; if (!n) return;
+  const lista = novDe_(n.id);
+  const vig = lista.filter(v => !v.tachada_at).length;
+  const cnt = document.getElementById('nov-cnt');
+  cnt.textContent = vig; cnt.classList.toggle('hidden', !lista.length);
+  const conTexto = !!fullTxt.value.trim();
+  document.getElementById('nov-input').disabled = !conTexto;
+  document.getElementById('nov-agregar').disabled = !conTexto;
+  document.getElementById('nov-ayuda').classList.toggle('hidden', conTexto);
+  const punto = COLOR_FUERTE[n.color] || COLOR_FUERTE.amarillo;
+  document.getElementById('nov-lista').innerHTML = lista.length ? lista.map(v => {
+    const tach = !!v.tachada_at;
+    return '<div class="nov-it' + (tach ? ' tachada' : '') + (v.id === novNuevaId ? ' entra' : '') + '" style="--punto:' + punto + '" data-nov="' + v.id + '">' +
+      '<div class="nov-fe">' + fechaCorta(v.creada) + (tach ? ' · tachada' : '') +
+        (colaNov[v.id] ? ' <span class="sin-subir" title="Falta subir"><i class="ti ti-cloud-upload"></i></span>' : '') + '</div>' +
+      '<div class="nov-tx">' + escaparHtml(v.texto) + '</div>' +
+      (tach ? '<button class="nov-acc" data-destachar="' + v.id + '" aria-label="Destachar" title="Destachar"><i class="ti ti-arrow-back-up"></i></button>'
+            : '<button class="nov-acc" data-tachar="' + v.id + '" aria-label="Tachar" title="Tachar"><i class="ti ti-x"></i></button>') +
+      '</div>';
+  }).join('') : '<div class="nov-vacia">' + (conTexto ? 'Todavía no hay novedades. Escribí arriba lo que va pasando: cada una queda con su fecha y hora.' : '') + '</div>';
+  novNuevaId = null;
+}
+function agregarNov_() {
+  const n = notas[abiertaId]; if (!n) return;
+  const inp = document.getElementById('nov-input');
+  const t = inp.value.trim();
+  if (!t) { inp.focus(); return; }
+  if (!fullTxt.value.trim()) { pintarNov_(); return; }
+  guardarFull_();                                          // la nota tiene que estar guardada antes que su novedad
+  const v = { id: uuid(), nota_id: n.id, texto: t, creada: new Date().toISOString(), tachada_at: null };
+  novedades[v.id] = v; colaNov[v.id] = ++rev;
+  guardarEquipo_(); programarSubida_();
+  inp.value = '';
+  novNuevaId = v.id;
+  registrarActividad_('novedad_agregar', v.id, 'OK', { nota: n.id });
+  pintarNov_(); pintarEstadoRed_();
+  document.getElementById('nov-lista').scrollTop = 0;
+  inp.focus();
+}
+function cambiarNov_(v, cambios) {
+  Object.assign(v, cambios);
+  novedades[v.id] = v; colaNov[v.id] = ++rev;
+  guardarEquipo_(); programarSubida_();
+  if (abiertaId === v.nota_id) pintarNov_();
+  pintarEstadoRed_();
+}
+function tacharNov_(id) {
+  const v = novedades[id]; if (!v || v.tachada_at) return;
+  cambiarNov_(v, { tachada_at: new Date().toISOString() });
+  registrarActividad_('novedad_tachar', v.id, 'OK', { nota: v.nota_id });
+  aviso('Novedad tachada', 'DESHACER', () => { if (novedades[id]) cambiarNov_(novedades[id], { tachada_at: null }); });
+}
+function destacharNov_(id) {
+  const v = novedades[id]; if (!v || !v.tachada_at) return;
+  cambiarNov_(v, { tachada_at: null });
+  registrarActividad_('novedad_destachar', v.id, 'OK', { nota: v.nota_id });
+  aviso('Novedad destachada');
+}
+document.getElementById('nov-agregar').addEventListener('click', agregarNov_);
+document.getElementById('nov-input').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); agregarNov_(); } });
+document.getElementById('nov-lista').addEventListener('click', e => {
+  const t = e.target.closest('[data-tachar]'); if (t) { tacharNov_(t.dataset.tachar); return; }
+  const d = e.target.closest('[data-destachar]'); if (d) destacharNov_(d.dataset.destachar);
+});
 function guardarFull_() {
   clearTimeout(fullTimer);
   const n = notas[abiertaId]; if (!n) return;
@@ -1443,7 +1674,7 @@ document.addEventListener('keydown', e => {
 });
 document.getElementById('fab').addEventListener('click', abrirNueva_);
 window.addEventListener('pagehide', () => { if (abiertaId) guardarFull_(); if (barraId) guardarBarra_(); });
-MQ_CEL.addEventListener && MQ_CEL.addEventListener('change', () => { if (uidActual) pintar_(); });
+MQ_CEL.addEventListener && MQ_CEL.addEventListener('change', () => { if (uidActual) pintar_(); if (abiertaId) autoAlto_(); });
 
 // ══════════════════════════════════════════════════════════════
 // PIZARRÓN (v1.1.0) — solo compu
